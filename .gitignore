@@ -1,0 +1,76 @@
+# Secrets and local env
+key.env
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.python-version
+.venv/
+venv/
+env/
+
+# Packaging and build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Test, lint, and type check caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs and runtime files
+*.log
+logs/
+tmp/
+temp/
+*.pid
+
+# LangGraph / app runtime data
+.langgraph/
+.langsmith/
+.cache/
+data/cache/
+data/tmp/
+
+# Vector stores and local databases
+qdrant_storage/
+chroma/
+*.sqlite
+*.sqlite3
+*.db
+
+# Model and embedding artifacts
+models/
+checkpoints/
+huggingface/
+
+# Frontend / JS
+node_modules/
+.npm/
+.pnpm-store/
+.yarn/
+.next/
+coverage/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
