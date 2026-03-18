@@ -6,6 +6,7 @@ from pathlib import Path
 
 from langchain_core.documents import Document
 
+from ..reflection_utils import merge_retrieval_reflection
 from ..schemas import QueryPlanOutput, RetrievalReflectionOutput
 from .llm_service import LLMService
 from .vector_store_service import CompanyVectorStoreService
@@ -65,7 +66,18 @@ class AgenticRAGService:
             reflection = self._reflect(company, refined_query, self._dedupe_chunks(all_chunks))
 
         all_chunks = self._dedupe_chunks(all_chunks)
+        page_count = len({chunk["page"] for chunk in all_chunks})
         references = sorted({chunk["reference"] for chunk in all_chunks})
+        reflection = merge_retrieval_reflection(
+            reflection,
+            rule_missing_points=["회수된 PDF 근거 페이지 수가 부족함"] if page_count < 2 else [],
+            rule_bias_checks=["추가 검색 쿼리가 기존 검색과 중복될 가능성이 있음"]
+            if len(set(all_queries)) < len(all_queries)
+            else [],
+            rule_missing_dimensions=[],
+            rule_failure_type="insufficient_coverage" if page_count < 2 else "none",
+            rule_action="retry_retrieve" if page_count < 2 else "accept",
+        )
         logger.info("Completed agentic RAG company=%s chunks=%s", company, len(all_chunks))
         return RAGRunResult(
             agentic_rag_plan=plan.queries,
@@ -78,14 +90,22 @@ class AgenticRAGService:
     def _plan_queries(self, company: str, refined_query: str) -> QueryPlanOutput:
         system_prompt = (
             "You are designing retrieval queries for a company-specific Agentic RAG workflow. "
-            "Return concise search queries tailored to the named company's own PDF corpus only. "
+            "Return concise, mutually distinct retrieval queries tailored to the named company's own PDF corpus only. "
+            "Each query should target a different evidence bucket so retrieval covers non-overlapping material. "
             "Do not mention other companies, comparisons, or information outside that single company's document."
         )
         user_prompt = (
             f"Company: {company}\n"
             f"Research objective: {refined_query}\n"
-            "Return 4 queries for this company only. Cover: core competitiveness, diversification, risk/counter-evidence, and execution evidence. "
-            "The query text must mention only the named company."
+            "Return 6 queries for this company only. "
+            "Cover these buckets without duplication: "
+            "1) technology or chemistry roadmap, "
+            "2) manufacturing footprint or capacity execution, "
+            "3) customer or product portfolio execution, "
+            "4) ESS or non-EV expansion, "
+            "5) supply chain, recycling, or service diversification, "
+            "6) risks, limits, or counter-evidence inside the company document. "
+            "The query text must mention only the named company and should use distinct nouns so they do not all retrieve the same chunks."
         )
         return self._llm_service.invoke_structured(system_prompt, user_prompt, QueryPlanOutput)
 
@@ -95,6 +115,9 @@ class AgenticRAGService:
             "Ask for follow-up queries only if the retrieved context is insufficient to support a basic company-only analysis. "
             "Treat unavailable details as acceptable limitations if the current evidence already supports at least a minimal summary of core competitiveness and diversification. "
             "Do not ask for competitor comparison, external market-share data, financial metrics, or information that is not likely to exist in the named company's own PDF. "
+            "Prefer coverage across different sections or pages of the company PDF, and avoid follow-up queries that are semantically redundant with existing retrieval. "
+            "Because the indexed PDF may be limited to a subset of pages, do not request detailed customer names, supply-chain specifics, service expansion, or recycling strategy unless the current evidence is otherwise too thin to write a basic company profile. "
+            "Fill missing_dimensions with the missing evidence buckets, choose recommended_action=retry_retrieve only when additional retrieval is truly needed, and use accept when the current evidence is already sufficient. "
             "Follow-up queries must target only the named company's own PDF."
         )
         chunk_preview = "\n\n".join(
