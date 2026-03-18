@@ -75,7 +75,7 @@ def load_config() -> AppConfig:
         embedding_model=os.getenv("EMBEDDING_MODEL", str(default_embedding_model)),
         chunk_size=int(os.getenv("CHUNK_SIZE", "1200")),
         chunk_overlap=int(os.getenv("CHUNK_OVERLAP", "200")),
-        top_k=int(os.getenv("RETRIEVER_TOP_K", "6")),
+        top_k=int(os.getenv("RETRIEVER_TOP_K", "5")),
         max_rag_rounds=int(os.getenv("MAX_RAG_ROUNDS", "2")),
         openai_api_key=os.getenv("OPENAI_API_KEY", ""),
         tavily_api_key=os.getenv("TAVILY_API_KEY", ""),
