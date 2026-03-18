@@ -101,3 +101,9 @@ class ReportOutput(BaseModel):
     ] = "none"
     recommended_action: Literal["accept", "retry_rewrite", "retry_retrieve", "fail"] = "accept"
     revision_needed: bool = False
+
+
+class PDFReadyMarkdownOutput(BaseModel):
+    """Structured output for PDF conversion stage (explicit schema)."""
+
+    markdown_body: str = Field(description="Normalized markdown body for PDF renderer input")

@@ -1,0 +1,123 @@
+<svg width="1200" height="420" viewBox="0 0 1200 420" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg1" x1="0" y1="0" x2="1200" y2="420" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#07111F"/>
+      <stop offset="1" stop-color="#0F172A"/>
+    </linearGradient>
+    <linearGradient id="panel1" x1="120" y1="80" x2="1080" y2="340" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0C1222"/>
+      <stop offset="1" stop-color="#134E4A"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="420" fill="url(#bg1)"/>
+  <rect x="44" y="44" width="1112" height="332" rx="26" fill="#0B1220" stroke="#334155" stroke-width="4"/>
+  <rect x="76" y="76" width="1048" height="268" rx="20" fill="url(#panel1)" stroke="#0D9488" stroke-width="4"/>
+
+  <g opacity="0.25" stroke="#2DD4BF" stroke-width="3">
+    <path d="M110 140H260L320 200H440"/>
+    <path d="M110 290H230L280 248H420"/>
+    <path d="M760 200H900L950 160H1090"/>
+    <path d="M760 230H860L930 278H1090"/>
+  </g>
+
+  <!-- Left panel: VECTOR STORE -->
+  <g>
+    <rect x="100" y="100" width="280" height="100" rx="14" fill="#08111E" stroke="#14B8A6" stroke-width="4"/>
+    <text x="124" y="134" fill="#5EEAD4" font-family="monospace" font-size="24" font-weight="700">VECTOR STORE</text>
+    <text x="124" y="166" fill="#E2E8F0" font-family="monospace" font-size="18">LGES INDEX</text>
+    <rect x="214" y="150" width="132" height="18" rx="6" fill="#1E293B"/>
+    <rect x="214" y="150" width="118" height="18" rx="6" fill="#10B981">
+      <animate attributeName="width" values="108;124;114;118;108" dur="2.4s" repeatCount="indefinite"/>
+    </rect>
+    <text x="124" y="197" fill="#E2E8F0" font-family="monospace" font-size="18">CATL INDEX</text>
+    <rect x="214" y="181" width="132" height="18" rx="6" fill="#1E293B"/>
+    <rect x="214" y="181" width="96" height="18" rx="6" fill="#2DD4BF">
+      <animate attributeName="width" values="84;120;90;96;84" dur="1.8s" repeatCount="indefinite"/>
+    </rect>
+  </g>
+
+  <!-- Right panel: REPORT STATUS -->
+  <g>
+    <rect x="820" y="100" width="280" height="100" rx="14" fill="#08111E" stroke="#F59E0B" stroke-width="4"/>
+    <text x="844" y="134" fill="#FDE68A" font-family="monospace" font-size="24" font-weight="700">REPORT STATUS</text>
+    <text x="844" y="166" fill="#FEF3C7" font-family="monospace" font-size="18">STRATEGY: READY</text>
+    <text x="844" y="192" fill="#FEF3C7" font-family="monospace" font-size="18">SWOT + COMPARE: ON</text>
+  </g>
+
+  <!-- Center: flow + battery icons -->
+  <g>
+    <rect x="420" y="108" width="360" height="204" rx="22" fill="#0F172A" stroke="#14B8A6" stroke-width="6"/>
+    <rect x="450" y="138" width="300" height="144" rx="14" fill="#020617" stroke="#0D9488" stroke-width="4"/>
+
+    <!-- Battery icons (LGES / CATL as cells) -->
+    <g transform="translate(468, 158)">
+      <rect x="0" y="4" width="28" height="40" rx="4" fill="none" stroke="#2DD4BF" stroke-width="2"/>
+      <rect x="6" y="12" width="16" height="28" rx="2" fill="#10B981">
+        <animate attributeName="height" values="28;20;26;28" dur="2s" repeatCount="indefinite"/>
+      </rect>
+      <rect x="4" y="0" width="20" height="6" rx="2" fill="#2DD4BF"/>
+      <text x="2" y="52" fill="#5EEAD4" font-family="monospace" font-size="10" font-weight="700">LGES</text>
+    </g>
+    <g transform="translate(518, 158)">
+      <rect x="0" y="4" width="28" height="40" rx="4" fill="none" stroke="#2DD4BF" stroke-width="2"/>
+      <rect x="6" y="12" width="16" height="24" rx="2" fill="#14B8A6">
+        <animate attributeName="height" values="24;18;22;24" dur="1.8s" repeatCount="indefinite"/>
+      </rect>
+      <rect x="4" y="0" width="20" height="6" rx="2" fill="#2DD4BF"/>
+      <text x="4" y="52" fill="#5EEAD4" font-family="monospace" font-size="10" font-weight="700">CATL</text>
+    </g>
+    <g transform="translate(568, 158)">
+      <rect x="0" y="4" width="28" height="40" rx="4" fill="none" stroke="#F59E0B" stroke-width="2"/>
+      <rect x="6" y="14" width="16" height="26" rx="2" fill="#F59E0B"/>
+      <rect x="4" y="0" width="20" height="6" rx="2" fill="#FBBF24"/>
+      <text x="2" y="52" fill="#FDE68A" font-family="monospace" font-size="10" font-weight="700">MKT</text>
+    </g>
+
+    <path d="M604 196 L648 196" stroke="#64748B" stroke-width="2" stroke-dasharray="6 4"/>
+    <path d="M604 232 L648 232" stroke="#64748B" stroke-width="2" stroke-dasharray="6 4"/>
+    <path d="M604 268 L648 268" stroke="#64748B" stroke-width="2" stroke-dasharray="6 4"/>
+
+    <g fill="#F59E0B">
+      <rect x="670" y="162" width="52" height="28" rx="6"/>
+      <rect x="670" y="198" width="52" height="28" rx="6"/>
+      <rect x="670" y="234" width="52" height="28" rx="6"/>
+    </g>
+    <text x="678" y="180" fill="#FDE68A" font-family="monospace" font-size="11">SWOT</text>
+    <text x="678" y="216" fill="#FDE68A" font-family="monospace" font-size="11">SWOT</text>
+    <text x="678" y="252" fill="#FDE68A" font-family="monospace" font-size="11">VIEW</text>
+
+    <path d="M730 176 L798 176" stroke="#64748B" stroke-width="2" stroke-dasharray="6 4"/>
+    <path d="M730 212 L798 212" stroke="#64748B" stroke-width="2" stroke-dasharray="6 4"/>
+    <path d="M730 248 L798 248" stroke="#64748B" stroke-width="2" stroke-dasharray="6 4"/>
+
+    <rect x="744" y="152" width="12" height="116" fill="#14B8A6"/>
+  </g>
+
+  <!-- Side bars -->
+  <g fill="#5EEAD4">
+    <rect x="406" y="132" width="12" height="28"/>
+    <rect x="406" y="172" width="12" height="28"/>
+    <rect x="406" y="212" width="12" height="28"/>
+    <rect x="406" y="252" width="12" height="28"/>
+    <rect x="782" y="132" width="12" height="28"/>
+    <rect x="782" y="172" width="12" height="28"/>
+    <rect x="782" y="212" width="12" height="28"/>
+    <rect x="782" y="252" width="12" height="28"/>
+  </g>
+
+  <!-- Bottom: progress bar + title -->
+  <rect x="96" y="324" width="1008" height="10" fill="#0F172A"/>
+  <rect x="96" y="324" width="760" height="10" rx="5" fill="#14B8A6">
+    <animate attributeName="width" values="640;890;720;760;640" dur="2.8s" repeatCount="indefinite"/>
+  </rect>
+
+  <!-- Battery icon next to title -->
+  <g transform="translate(98, 338)">
+    <rect x="0" y="6" width="20" height="30" rx="3" fill="none" stroke="#14B8A6" stroke-width="2"/>
+    <rect x="4" y="12" width="12" height="18" rx="2" fill="#0D9488"/>
+    <rect x="2" y="0" width="16" height="8" rx="2" fill="#14B8A6"/>
+  </g>
+  <text x="128" y="366" fill="#E2E8F0" font-family="monospace" font-size="32" font-weight="700">BATTERY MARKET STRATEGY ANALYSIS AGENT</text>
+  <text x="98" y="394" fill="#64748B" font-family="monospace" font-size="16">PDF RAG &#183; market / LGES vs CATL &#183; SWOT &#183; strategic comparison &#183; report MD/PDF</text>
+</svg>
