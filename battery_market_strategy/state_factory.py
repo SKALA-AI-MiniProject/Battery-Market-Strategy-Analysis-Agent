@@ -28,6 +28,9 @@ def make_reflection_state(focus: str) -> ReflectionState:
         focus=focus,
         missing_points=[],
         bias_checks=[],
+        missing_dimensions=[],
+        failure_type="none",
+        recommended_action="accept",
         revision_needed=False,
     )
 

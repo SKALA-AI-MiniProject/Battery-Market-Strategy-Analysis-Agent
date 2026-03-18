@@ -35,11 +35,25 @@ SearchVerdict = Literal[
     "exhausted",
 ]
 
+ReflectionAction = Literal["accept", "retry_rewrite", "retry_retrieve", "fail"]
+ReflectionFailureType = Literal[
+    "none",
+    "insufficient_coverage",
+    "redundant_evidence",
+    "weak_grounding",
+    "missing_numeric_support",
+    "source_concentration",
+    "format_issue",
+]
+
 
 class ReflectionState(TypedDict):
     focus: str
     missing_points: list[str]
     bias_checks: list[str]
+    missing_dimensions: list[str]
+    failure_type: ReflectionFailureType
+    recommended_action: ReflectionAction
     revision_needed: bool
 
 
