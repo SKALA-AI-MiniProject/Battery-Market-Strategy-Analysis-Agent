@@ -43,3 +43,6 @@ def is_approved(evaluation: SearchEvaluationState) -> bool:
 def should_retry(evaluation: SearchEvaluationState) -> bool:
     return evaluation["verdict"] in {"revise", "retrieve"} and evaluation["retry_count"] < evaluation["max_retry"]
 
+
+def is_exhausted(evaluation: SearchEvaluationState) -> bool:
+    return evaluation["verdict"] == "exhausted"

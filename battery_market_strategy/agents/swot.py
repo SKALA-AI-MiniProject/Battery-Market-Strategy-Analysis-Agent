@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from .base import BaseAgent
+from ..reference_utils import sanitize_references
 from ..schemas import SWOTOutput
 from ..state_models import GraphState
 from ..services import LLMService
@@ -44,7 +45,7 @@ class SWOTAgent(BaseAgent):
             "강점과 약점은 내부 요인, 기회와 위협은 외부 요인으로 구분해."
         )
         output = self._llm_service.invoke_structured(system_prompt, user_prompt, SWOTOutput)
-        references = sorted(set(output.references + market["references"] + company_analysis["references"]))
+        references = sanitize_references(market["references"] + company_analysis["references"])
         logger.info("Completed %s", self.name)
         return {
             self.state_key: {

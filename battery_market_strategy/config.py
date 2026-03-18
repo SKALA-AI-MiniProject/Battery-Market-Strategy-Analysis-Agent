@@ -52,13 +52,15 @@ def load_config() -> AppConfig:
     default_data_dir = project_root / "data"
     fallback_data_dir = package_root / "data"
     data_dir = Path(os.getenv("DATA_DIR", default_data_dir if default_data_dir.exists() else fallback_data_dir))
-    cache_dir = Path(os.getenv("CACHE_DIR", project_root / ".cache" / "poc_graph"))
+    cache_dir = Path(os.getenv("CACHE_DIR", project_root / ".cache" / "battery_market_strategy"))
     faiss_root = cache_dir / "faiss"
     default_output_dir = project_root / "output"
     fallback_output_dir = package_root / "output"
     output_dir = Path(
         os.getenv("OUTPUT_DIR", default_output_dir if default_output_dir.exists() else fallback_output_dir)
     )
+    local_embedding_model_dir = project_root / "models" / "bge-m3"
+    default_embedding_model = local_embedding_model_dir if local_embedding_model_dir.exists() else "BAAI/bge-m3"
 
     return AppConfig(
         project_root=project_root,
@@ -70,7 +72,7 @@ def load_config() -> AppConfig:
         lges_pdf_path=Path(os.getenv("LGES_PDF_PATH", data_dir / "LGES.pdf")),
         catl_pdf_path=Path(os.getenv("CATL_PDF_PATH", data_dir / "CATL.pdf")),
         llm_model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
-        embedding_model=os.getenv("EMBEDDING_MODEL", "BAAI/bge-m3"),
+        embedding_model=os.getenv("EMBEDDING_MODEL", str(default_embedding_model)),
         chunk_size=int(os.getenv("CHUNK_SIZE", "1200")),
         chunk_overlap=int(os.getenv("CHUNK_OVERLAP", "200")),
         top_k=int(os.getenv("RETRIEVER_TOP_K", "6")),

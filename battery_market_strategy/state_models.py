@@ -1,6 +1,20 @@
 from __future__ import annotations
 
-from typing import Literal, TypedDict
+import operator
+from typing import Annotated, Literal, TypedDict
+
+
+def merge_unique_strings(existing: list[str], update: list[str] | None) -> list[str]:
+    if not update:
+        return list(existing)
+
+    merged = list(existing)
+    seen = set(existing)
+    for item in update:
+        if item not in seen:
+            merged.append(item)
+            seen.add(item)
+    return merged
 
 
 WorkflowPhase = Literal[
@@ -10,6 +24,7 @@ WorkflowPhase = Literal[
     "comparison",
     "reporting",
     "done",
+    "failed",
 ]
 
 SearchVerdict = Literal[
@@ -136,3 +151,5 @@ class GraphState(TypedDict):
     catl_swot: SWOTState
     comparison: ComparisonState
     report: ReportState
+    collected_references: Annotated[list[str], merge_unique_strings]
+    execution_trace: Annotated[list[str], operator.add]

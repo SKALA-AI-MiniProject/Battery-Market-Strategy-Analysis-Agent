@@ -27,6 +27,7 @@ GRAPH_NODES = [
     "swot_parallel_join",
     "strategic_comparison_agent",
     "pdf_report_agent",
+    "finalize",
 ]
 
 
@@ -50,7 +51,8 @@ GRAPH_EDGES = [
     ("strategic_comparison_agent", "supervisor_agent"),
     ("supervisor_agent", "pdf_report_agent"),
     ("pdf_report_agent", "supervisor_agent"),
-    ("supervisor_agent", "END"),
+    ("supervisor_agent", "finalize"),
+    ("finalize", "END"),
 ]
 
 
@@ -82,7 +84,8 @@ flowchart TD
     supervisor --> report[PDF Report Agent]
     report --> supervisor
 
-    supervisor --> END([END])
+    supervisor --> finalize[Finalize]
+    finalize --> END([END])
 """.strip()
 
 
@@ -107,5 +110,6 @@ SUPERVISOR_ROUTE_MAP = {
     "swot_parallel": "swot_parallel_fanout",
     "comparison": "strategic_comparison_agent",
     "reporting": "pdf_report_agent",
-    "done": "end",
+    "done": "finalize",
+    "failed": "finalize",
 }
