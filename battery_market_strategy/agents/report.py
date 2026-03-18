@@ -4,6 +4,7 @@ import logging
 
 from .base import BaseAgent
 from ..execution_state import is_approved, update_search_evaluation
+from ..reference_utils import inject_references_section, render_references, sanitize_references
 from ..schemas import ReportOutput
 from ..spec import DEFAULT_REPORT_TITLE
 from ..state_models import GraphState
@@ -25,6 +26,14 @@ class PDFReportAgent(BaseAgent):
             return {"report": state["report"]}
 
         logger.info("Starting PDFReportAgent")
+        revision_guidance = ""
+        if "report" in state["supervisor"]["revision_requests"]:
+            guidance_items = (
+                [state["report"]["search_evaluation"]["last_reason"]]
+                + state["report"]["reflection"]["missing_points"]
+                + [item for item in state["supervisor"]["revision_requests"] if item != "report"]
+            )
+            revision_guidance = "\n보완 요청:\n" + "\n".join(f"- {item}" for item in sorted(set(guidance_items)))
         system_prompt = (
             "You are preparing a professional battery market strategy report in Korean. "
             "Use only the supplied analyses. Produce concise but information-dense markdown."
@@ -47,25 +56,19 @@ class PDFReportAgent(BaseAgent):
             "## CATL\n"
             "## SWOT Comparison\n"
             "## Strategic Conclusion\n"
-            "## References\n"
-            "References 섹션에는 실제 참조 식별자나 URL만 나열해."
+            "References 섹션은 작성하지 마. 참고문헌은 시스템이 별도로 추가한다."
+            f"{revision_guidance}"
         )
         output = self._llm_service.invoke_structured(system_prompt, user_prompt, ReportOutput)
-        markdown_path, pdf_path = self._report_service.save_report(output.title, output.markdown_body)
-        references = sorted(
-            set(
-                output.references
-                + state["market_analysis"]["references"]
-                + state["lges_core_analysis"]["references"]
-                + state["catl_core_analysis"]["references"]
-                + state["comparison"]["references"]
-            )
-        )
+        references = sanitize_references(state["collected_references"])
+        rendered_references = render_references(references)
+        markdown_body = inject_references_section(output.markdown_body, references)
+        markdown_path, pdf_path = self._report_service.save_report(output.title, markdown_body)
         quality_check = {
             "has_summary": bool(output.summary.strip()),
             "has_references": bool(references),
-            "summary_is_consistent": output.summary.strip() in output.markdown_body or "Executive Summary" in output.markdown_body,
-            "references_are_relevant": "## References" in output.markdown_body,
+            "summary_is_consistent": output.summary.strip() in markdown_body or "Executive Summary" in markdown_body,
+            "references_are_relevant": all(item in markdown_body for item in rendered_references) and "## References" in markdown_body,
         }
         revision_needed = output.revision_needed or not all(quality_check.values())
         reason = "; ".join(output.missing_points) if output.missing_points else "report quality approved"
@@ -74,7 +77,15 @@ class PDFReportAgent(BaseAgent):
             verdict="revise" if revision_needed else "approved",
             last_reason=reason,
         )
-        logger.info("Completed PDFReportAgent pdf=%s", pdf_path)
+        logger.info(
+            "Completed PDFReportAgent pdf=%s verdict=%s retry_count=%s revision_count=%s reason=%s quality_check=%s",
+            pdf_path,
+            search_evaluation["verdict"],
+            search_evaluation["retry_count"],
+            search_evaluation["revision_count"],
+            search_evaluation["last_reason"],
+            quality_check,
+        )
         return {
             "report": {
                 "title": output.title,

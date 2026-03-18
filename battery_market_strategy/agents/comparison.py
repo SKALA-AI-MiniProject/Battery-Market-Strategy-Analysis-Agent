@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from .base import BaseAgent
+from ..reference_utils import sanitize_references
 from ..schemas import ComparisonOutput
 from ..state_models import GraphState
 from ..services import LLMService
@@ -42,15 +43,7 @@ class StrategicComparisonAgent(BaseAgent):
             "전략적 차이점, 강약점 비교, 종합 결론을 작성해."
         )
         output = self._llm_service.invoke_structured(system_prompt, user_prompt, ComparisonOutput)
-        references = sorted(
-            set(
-                output.references
-                + state["lges_core_analysis"]["references"]
-                + state["catl_core_analysis"]["references"]
-                + state["lges_swot"]["references"]
-                + state["catl_swot"]["references"]
-            )
-        )
+        references = sanitize_references(state["collected_references"])
         logger.info("Completed StrategicComparisonAgent")
         return {
             "comparison": {

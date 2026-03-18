@@ -6,11 +6,21 @@ from pathlib import Path
 from .base import BaseAgent
 from ..config import AppConfig
 from ..execution_state import is_approved, update_search_evaluation
+from ..reference_utils import sanitize_references
 from ..schemas import CompanyAnalysisOutput
 from ..state_models import GraphState
 from ..services import AgenticRAGService, CompanyVectorStoreService, LLMService
 
 logger = logging.getLogger(__name__)
+
+
+def _has_minimum_company_analysis_signal(output: CompanyAnalysisOutput, references: list[str]) -> bool:
+    return (
+        len(output.core_competitiveness) >= 2
+        and len(output.diversification_strategy) >= 2
+        and len(output.evidence) >= 3
+        and len(references) >= 3
+    )
 
 
 class CompanyCorePortfolioAgent(BaseAgent):
@@ -49,6 +59,10 @@ class CompanyCorePortfolioAgent(BaseAgent):
         pdf_path = Path(retrieval_state["pdf_path"])
         index_dir = Path(retrieval_state["index_dir"])
         refined_query = state["supervisor"]["refined_user_query"] or state["raw_user_query"]
+        revision_guidance = ""
+        if self.state_key in state["supervisor"]["revision_requests"]:
+            last_reason = state[self.state_key]["search_evaluation"]["last_reason"]
+            revision_guidance = f"\n\n이전 시도에서 보완이 필요했던 항목:\n- {last_reason}"
 
         index_result = self._vector_store_service.ensure_index(self.company_id, pdf_path, index_dir)
         rag_result = self._rag_service.run(self.company, refined_query, index_result.index_dir, retrieval_state["top_k"])
@@ -58,7 +72,10 @@ class CompanyCorePortfolioAgent(BaseAgent):
 
         system_prompt = (
             "You are a corporate strategy analyst focused on battery companies. "
-            "Use only the provided company-PDF evidence. Write all outputs in Korean."
+            "Use only the provided company-PDF evidence. Write all outputs in Korean. "
+            "If a detail is not explicit in the company PDF, mark it as not clearly disclosed instead of treating it as a required blocker. "
+            "Do not require competitor comparison, external market-share data, or financial metrics unless they are explicitly present in the supplied company PDF. "
+            "Set revision_needed=True only when the evidence is too weak to produce at least 2 concrete core competitiveness points, 2 diversification points, and 3 grounded evidence bullets."
         )
         user_prompt = (
             f"회사: {self.company}\n"
@@ -68,6 +85,7 @@ class CompanyCorePortfolioAgent(BaseAgent):
             "다각화 전략은 EV 외 확장, chemistry diversification, ESS, 공급망/재활용/서비스 확장을 포함해.\n"
             "모든 결론은 보수적으로 정리하고, 확인된 사실과 해석을 섞지 마.\n\n"
             f"회사 PDF 근거:\n{chunk_preview}"
+            f"{revision_guidance}"
         )
         output = self._llm_service.invoke_structured(system_prompt, user_prompt, CompanyAnalysisOutput)
 
@@ -80,10 +98,13 @@ class CompanyCorePortfolioAgent(BaseAgent):
             }
             for item in rag_result.retrieved_chunks
         ]
-        references = sorted(set(output.references + rag_result.references))
+        references = sanitize_references(rag_result.references)
         combined_missing_points = output.missing_points + rag_result.reflection.missing_points
         combined_bias_checks = output.bias_checks + rag_result.reflection.bias_checks
-        if rag_result.reflection.revision_needed:
+        has_minimum_signal = _has_minimum_company_analysis_signal(output, references)
+        if has_minimum_signal:
+            verdict = "approved"
+        elif rag_result.reflection.revision_needed:
             verdict = "retrieve"
         elif output.revision_needed:
             verdict = "revise"
@@ -96,10 +117,14 @@ class CompanyCorePortfolioAgent(BaseAgent):
             last_reason=reason,
         )
         logger.info(
-            "Completed %s cached=%s references=%s",
+            "Completed %s cached=%s references=%s verdict=%s retry_count=%s revision_count=%s reason=%s",
             self.name,
             not index_result.needs_reindex,
             len(references),
+            search_evaluation["verdict"],
+            search_evaluation["retry_count"],
+            search_evaluation["revision_count"],
+            search_evaluation["last_reason"],
         )
         return {
             self.retrieval_state_key: {

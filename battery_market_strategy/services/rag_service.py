@@ -92,8 +92,10 @@ class AgenticRAGService:
     def _reflect(self, company: str, refined_query: str, chunks: list[dict]) -> RetrievalReflectionOutput:
         system_prompt = (
             "You are auditing the sufficiency of retrieved evidence for company analysis. "
-            "Ask for follow-up queries only if the retrieved context is insufficient or one-sided. "
-            "Follow-up queries must target only the named company's own PDF and must not ask for competitor comparison."
+            "Ask for follow-up queries only if the retrieved context is insufficient to support a basic company-only analysis. "
+            "Treat unavailable details as acceptable limitations if the current evidence already supports at least a minimal summary of core competitiveness and diversification. "
+            "Do not ask for competitor comparison, external market-share data, financial metrics, or information that is not likely to exist in the named company's own PDF. "
+            "Follow-up queries must target only the named company's own PDF."
         )
         chunk_preview = "\n\n".join(
             f"[{item['reference']}] {item['content'][:700]}" for item in chunks[:8]
@@ -106,8 +108,9 @@ class AgenticRAGService:
             f"Research objective: {refined_query}\n\n"
             f"Retrieved company-PDF evidence:\n{chunk_preview}\n\n"
             f"Optional external counter-evidence snippets:\n{chr(10).join(web_counter_evidence)}\n\n"
+            "Approve the evidence if it is sufficient to produce at least 2 concrete points on core competitiveness, 2 on diversification, and 3 grounded evidence bullets. "
             "If evidence is insufficient, provide focused follow-up retrieval queries for the company PDF only. "
-            "Do not request information about any other company."
+            "Do not request information about any other company or unavailable external benchmarking data."
         )
         return self._llm_service.invoke_structured(system_prompt, user_prompt, RetrievalReflectionOutput)
 

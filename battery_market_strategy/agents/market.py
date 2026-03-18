@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from .base import BaseAgent
+from ..reference_utils import sanitize_references
 from ..execution_state import is_approved, update_search_evaluation
 from ..schemas import MarketAnalysisOutput
 from ..state_models import GraphState
@@ -25,6 +26,10 @@ class MarketAnalysisAgent(BaseAgent):
 
         logger.info("Starting MarketAnalysisAgent")
         refined_query = state["supervisor"]["refined_user_query"] or state["raw_user_query"]
+        revision_guidance = ""
+        if "market_analysis" in state["supervisor"]["revision_requests"]:
+            last_reason = state["market_analysis"]["search_evaluation"]["last_reason"]
+            revision_guidance = f"\n\n이전 시도에서 보완이 필요했던 항목:\n- {last_reason}"
         search_queries = [
             "global battery market EV ESS demand outlook battery industry",
             "battery industry North America Europe China policy price competition ESS",
@@ -47,10 +52,11 @@ class MarketAnalysisAgent(BaseAgent):
             "반드시 EV 수요, ESS 수요, 지역별 정책/현지화, 가격 경쟁, 공급 과잉 또는 수익성 압박을 다뤄.\n\n"
             f"검색 근거:\n{chr(10).join(f'- {item}' for item in snippets[:12])}\n\n"
             "각 evidence 항목은 측정 가능한 사실이나 구체 주장으로 써."
+            f"{revision_guidance}"
         )
         output = self._llm_service.invoke_structured(system_prompt, user_prompt, MarketAnalysisOutput)
 
-        references = output.references or _extract_references(snippets)
+        references = sanitize_references(_extract_references(snippets))
         verdict = "revise" if output.revision_needed else "approved"
         reason = "; ".join(output.missing_points) if output.missing_points else "reflection approved"
         search_evaluation = update_search_evaluation(
@@ -58,7 +64,14 @@ class MarketAnalysisAgent(BaseAgent):
             verdict=verdict,
             last_reason=reason,
         )
-        logger.info("Completed MarketAnalysisAgent evidence_count=%s", len(output.evidence))
+        logger.info(
+            "Completed MarketAnalysisAgent evidence_count=%s verdict=%s retry_count=%s revision_count=%s reason=%s",
+            len(output.evidence),
+            search_evaluation["verdict"],
+            search_evaluation["retry_count"],
+            search_evaluation["revision_count"],
+            search_evaluation["last_reason"],
+        )
         return {
             "market_analysis": {
                 "market_view": output.market_view,
