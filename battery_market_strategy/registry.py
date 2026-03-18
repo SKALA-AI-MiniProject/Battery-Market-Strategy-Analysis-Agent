@@ -44,12 +44,14 @@ class GraphRegistry:
             self.config,
             self.llm_service,
             self.rag_service,
+            self.web_search_service,
             self.vector_store_service,
         )
         self.catl_core = CATLCorePortfolioAgent(
             self.config,
             self.llm_service,
             self.rag_service,
+            self.web_search_service,
             self.vector_store_service,
         )
         self.initial_parallel_join = InitialParallelJoin()

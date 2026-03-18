@@ -3,7 +3,8 @@ from __future__ import annotations
 import logging
 
 from .base import BaseAgent
-from ..execution_state import is_approved, update_search_evaluation
+from ..execution_state import is_approved
+from ..reference_utils import inject_references_section, render_references, sanitize_references
 from ..schemas import PDFReadyMarkdownOutput, ReportOutput
 from ..spec import DEFAULT_REPORT_TITLE
 from ..state_models import GraphState
@@ -49,9 +50,28 @@ class PDFReportAgent(BaseAgent):
             return {"report": state["report"]}
 
         logger.info("Starting PDFReportAgent")
+        revision_guidance = ""
+        if "report" in state["supervisor"]["revision_requests"]:
+            guidance_items = (
+                [state["report"]["search_evaluation"]["last_reason"]]
+                + state["report"]["reflection"]["missing_points"]
+                + [item for item in state["supervisor"]["revision_requests"] if item != "report"]
+            )
+            revision_guidance = "\n보완 요청:\n" + "\n".join(f"- {item}" for item in sorted(set(guidance_items)))
+        market_source_pool = "; ".join(render_references(state["market_analysis"]["references"])) or "없음"
+        lges_source_pool = "; ".join(render_references(state["lges_core_analysis"]["references"])) or "없음"
+        catl_source_pool = "; ".join(render_references(state["catl_core_analysis"]["references"])) or "없음"
+        comparison_source_pool = "; ".join(render_references(state["comparison"]["references"])) or "없음"
         system_prompt = (
             "You are preparing a professional battery market strategy report in Korean. "
-            "Use only the supplied analyses. Produce concise but information-dense markdown."
+            "Use only the supplied analyses. Produce a board-style strategy report in Korean. "
+            "The report should feel analytical, evidence-aware, and decision-oriented rather than like a short summary. "
+            "Every major section should explain not only what is true, but why it matters strategically. "
+            "Do not write generic filler, broad praise, or unsupported superlatives. "
+            "Use short source-note lines such as '근거 출처: ...' inside sections when useful, drawing only from the provided source pools. "
+            "Fill missing_dimensions with any absent required sections or coverage gaps. "
+            "Use recommended_action=retry_rewrite when structure, grounding, or consistency is weak, and accept when the report is complete and coherent. "
+            "Set revision_needed=True only when recommended_action is not accept."
         )
         user_prompt = (
             f"제목 기본값: {DEFAULT_REPORT_TITLE}\n\n"
@@ -66,64 +86,80 @@ class PDFReportAgent(BaseAgent):
             f"비교 분석={state['comparison']}\n\n"
             "다음 구조를 갖는 markdown_body를 작성해:\n"
             "## Executive Summary\n"
+            "- 3~4개 bullet로 핵심 인사이트, 경쟁 구도, 전략적 시사점을 요약\n"
             "## Market Analysis\n"
+            "- 산업 관점에서 수요 구조, 공급/가격, 정책/현지화, 전략적 함의를 서술\n"
+            "- 회사 비교가 아니라 산업 레벨 분석이 중심이어야 함\n"
+            "- 마지막에 '근거 출처:' 한 줄 추가\n"
             "## LG Energy Solution\n"
+            "- Core Competitiveness, Portfolio Diversification, Risks/Constraints, Strategic Implication을 구분해 서술\n"
+            "- 강점 나열이 아니라 근거 기반 설명과 전략적 의미를 포함\n"
+            "- 마지막에 '근거 출처:' 한 줄 추가\n"
             "## CATL\n"
+            "- Core Competitiveness, Portfolio Diversification, Risks/Constraints, Strategic Implication을 구분해 서술\n"
+            "- 강점 나열이 아니라 근거 기반 설명과 전략적 의미를 포함\n"
+            "- 마지막에 '근거 출처:' 한 줄 추가\n"
             "## SWOT Comparison\n"
+            "- 표만 반복하지 말고, 어떤 시장 조건에서 어느 회사가 유리한지 2~4개 bullet로 비교 분석\n"
             "## Strategic Conclusion\n"
-            "## References\n"
-            "References 섹션에는 실제 참조 식별자나 URL만 나열해."
+            "- 단순 요약이 아니라 회사별 권고안, 관찰 포인트, 우위가 바뀔 수 있는 조건을 포함\n"
+            "References 섹션은 작성하지 마. 참고문헌은 시스템이 별도로 추가한다."
+            f"\n\n시장 섹션 source pool:\n{market_source_pool}"
+            f"\n\nLGES 섹션 source pool:\n{lges_source_pool}"
+            f"\n\nCATL 섹션 source pool:\n{catl_source_pool}"
+            f"\n\n비교/결론 source pool:\n{comparison_source_pool}"
+            f"{revision_guidance}"
         )
         output = self._llm_service.invoke_structured(system_prompt, user_prompt, ReportOutput)
-        # PDF 변환용 프롬프트로 구조 정규화 (강의: 출력 형식/스키마, 문서 구조 정규화)
+        references = sanitize_references(state["collected_references"])
+        rendered_references = render_references(references)
+        markdown_body = inject_references_section(output.markdown_body, references)
+
         try:
-            pdf_user = PDF_CONVERSION_USER_TEMPLATE.format(markdown_body=output.markdown_body)
+            pdf_user = PDF_CONVERSION_USER_TEMPLATE.format(markdown_body=markdown_body)
             pdf_ready = self._llm_service.invoke_structured(
                 PDF_CONVERSION_SYSTEM_PROMPT, pdf_user, PDFReadyMarkdownOutput
             )
             body_for_pdf = pdf_ready.markdown_body
-        except Exception as e:
-            logger.warning("PDF conversion prompt step failed, using original markdown: %s", e)
-            body_for_pdf = output.markdown_body
+        except Exception as exc:
+            logger.warning("PDF conversion prompt step failed, using original markdown: %s", exc)
+            body_for_pdf = markdown_body
+
         markdown_path, pdf_path = self._report_service.save_report(output.title, body_for_pdf)
-        references = sorted(
-            set(
-                output.references
-                + state["market_analysis"]["references"]
-                + state["lges_core_analysis"]["references"]
-                + state["catl_core_analysis"]["references"]
-                + state["comparison"]["references"]
-            )
-        )
         quality_check = {
             "has_summary": bool(output.summary.strip()),
             "has_references": bool(references),
-            "summary_is_consistent": output.summary.strip() in output.markdown_body or "Executive Summary" in output.markdown_body,
-            "references_are_relevant": "## References" in output.markdown_body,
+            "summary_is_consistent": output.summary.strip() in markdown_body or "Executive Summary" in markdown_body,
+            "references_are_relevant": all(item in markdown_body for item in rendered_references) and "## References" in markdown_body,
         }
-        revision_needed = output.revision_needed or not all(quality_check.values())
-        reason = "; ".join(output.missing_points) if output.missing_points else "report quality approved"
-        search_evaluation = update_search_evaluation(
-            state["report"]["search_evaluation"],
-            verdict="revise" if revision_needed else "approved",
-            last_reason=reason,
+        agent_decision = {
+            "focus": "report quality check before PDF generation",
+            "missing_points": output.missing_points,
+            "bias_checks": output.bias_checks,
+            "missing_dimensions": output.missing_dimensions,
+            "failure_type": output.failure_type,
+            "recommended_action": output.recommended_action,
+            "revision_needed": output.revision_needed or output.recommended_action != "accept",
+        }
+        logger.info(
+            "Completed PDFReportAgent pdf=%s agent_action=%s missing_dimensions=%s quality_check=%s",
+            pdf_path,
+            agent_decision["recommended_action"],
+            agent_decision["missing_dimensions"],
+            quality_check,
         )
-        logger.info("Completed PDFReportAgent pdf=%s", pdf_path)
         return {
             "report": {
                 "title": output.title,
                 "summary": output.summary,
+                "markdown_body": markdown_body,
                 "markdown_path": markdown_path,
                 "pdf_path": pdf_path,
                 "references": references,
                 "quality_check": quality_check,
-                "search_evaluation": search_evaluation,
-                "reflection": {
-                    "focus": "report quality check before PDF generation",
-                    "missing_points": output.missing_points,
-                    "bias_checks": output.bias_checks,
-                    "revision_needed": revision_needed,
-                },
+                "agent_decision": agent_decision,
+                "search_evaluation": state["report"]["search_evaluation"],
+                "reflection": state["report"]["reflection"],
                 "ready": True,
             }
         }

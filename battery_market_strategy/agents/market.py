@@ -5,14 +5,9 @@ import re
 from urllib.parse import urlparse
 
 from .base import BaseAgent
+from ..execution_state import is_approved
 from ..reference_utils import sanitize_references
-from ..reflection_utils import (
-    assess_market_output,
-    build_reflection,
-    filter_market_missing_dimensions,
-    reflection_action_to_verdict,
-)
-from ..execution_state import is_approved, update_search_evaluation
+from ..reflection_utils import filter_market_missing_dimensions
 from ..schemas import MarketAnalysisOutput
 from ..state_models import GraphState
 from ..services import LLMService, WebSearchService
@@ -54,10 +49,14 @@ class MarketAnalysisAgent(BaseAgent):
         system_prompt = (
             "You are a battery market analyst preparing an evidence-grounded sector brief. "
             "Use only the provided search evidence and write all outputs in Korean. "
+            "The market analysis must focus on industry structure first, not on company-by-company comparison. "
+            "Use company names only as examples inside broader sector dynamics when necessary. "
             "Prioritize diverse, non-overlapping facts from distinct sources rather than repeating the same theme. "
             "Prefer concrete claims with numbers, dates, regions, policy names, product categories, or capacity/price indicators when available. "
             "Do not duplicate the same statistic, company example, or source across evidence bullets. "
             "Separate directly supported facts from your own inference, and if the evidence conflicts, acknowledge the tension instead of flattening it. "
+            "Do not default to an optimistic narrative. Deliberately look for downside signals such as oversupply, margin pressure, policy delays, utilization weakness, demand slowdown, or execution risk when the evidence supports them. "
+            "If the evidence set is mixed, represent both tailwinds and headwinds instead of summarizing only the positive side. "
             "Fill missing_dimensions with any missing coverage buckets among EV demand, ESS demand, policy/localization, pricing/profitability, supply/capacity, and risk/headwinds. "
             "Do not treat OEM-specific contracts, next-generation battery investment details, or raw-material supply chain minutiae as hard blockers when the broader market picture is already sufficient for a strategic report. "
             "Use recommended_action=retry_retrieve when source coverage is genuinely missing, and recommended_action=retry_rewrite when the evidence exists but the synthesis is repetitive or weak. "
@@ -67,7 +66,13 @@ class MarketAnalysisAgent(BaseAgent):
             f"연구 목표:\n{refined_query}\n\n"
             "아래 웹 검색 근거를 바탕으로 배터리 산업 시장 분석을 작성해.\n"
             "반드시 EV 수요, ESS 수요, 지역별 정책/현지화, 가격 경쟁, 공급 과잉 또는 수익성 압박을 다뤄.\n"
-            "가능하면 서로 다른 출처와 서로 다른 사실을 기반으로 6개 이상의 evidence를 제시하고, 같은 출처에서 나온 유사 주장 반복은 피해야 한다.\n\n"
+            "market_view는 산업 전체 관점에서 2~3개 단락 분량으로 작성하고, 다음 흐름을 자연스럽게 포함해야 한다:\n"
+            "1) 수요 구조 변화(EV vs ESS)\n"
+            "2) 공급·가격·가동률 또는 수익성 압박\n"
+            "3) 지역별 정책/현지화와 전략적 함의\n"
+            "가능하면 서로 다른 출처와 서로 다른 사실을 기반으로 6개 이상의 evidence를 제시하고, 같은 출처에서 나온 유사 주장 반복은 피해야 한다.\n"
+            "evidence와 market_view에는 시장 성장 요인만이 아니라, 최소 1~2개의 하방 요인 또는 제약 조건을 포함해 균형 있게 정리해.\n"
+            "evidence는 단순 나열이 아니라 전략 보고서에 바로 인용 가능한 fact statement 형태로 써라.\n\n"
             f"검색 근거:\n{chr(10).join(f'- {item}' for item in snippets[:16])}\n\n"
             "각 evidence 항목은 측정 가능한 사실이나 구체 주장으로 쓰고, 동일한 내용의 재진술은 하나로 합쳐라."
             f"{revision_guidance}"
@@ -75,49 +80,29 @@ class MarketAnalysisAgent(BaseAgent):
         output = self._llm_service.invoke_structured(system_prompt, user_prompt, MarketAnalysisOutput)
 
         references = sanitize_references(_extract_references(snippets))
-        rule_reflection = assess_market_output(output, references)
-        llm_missing_dimensions = filter_market_missing_dimensions(output.missing_dimensions)
-        llm_action = output.recommended_action if rule_reflection["recommended_action"] != "accept" else "accept"
-        llm_missing_points = output.missing_points if rule_reflection["recommended_action"] != "accept" else []
-        if rule_reflection["recommended_action"] == "accept":
-            llm_missing_dimensions = []
-        reflection = build_reflection(
-            focus="market attractiveness and sector structure",
-            llm_missing_points=llm_missing_points,
-            llm_bias_checks=output.bias_checks,
-            llm_missing_dimensions=llm_missing_dimensions,
-            llm_failure_type=output.failure_type,
-            llm_action=llm_action,
-            rule_missing_points=rule_reflection["missing_points"],
-            rule_bias_checks=rule_reflection["bias_checks"],
-            rule_missing_dimensions=rule_reflection["missing_dimensions"],
-            rule_failure_type=rule_reflection["failure_type"],
-            rule_action=rule_reflection["recommended_action"],
-        )
-        verdict = reflection_action_to_verdict(reflection["recommended_action"])
-        reason = "; ".join(reflection["missing_points"]) if reflection["missing_points"] else "reflection approved"
-        search_evaluation = update_search_evaluation(
-            state["market_analysis"]["search_evaluation"],
-            verdict=verdict,
-            last_reason=reason,
-        )
+        agent_decision = {
+            "focus": "market attractiveness and sector structure",
+            "missing_points": output.missing_points,
+            "bias_checks": output.bias_checks,
+            "missing_dimensions": filter_market_missing_dimensions(output.missing_dimensions),
+            "failure_type": output.failure_type,
+            "recommended_action": output.recommended_action,
+            "revision_needed": output.revision_needed or output.recommended_action != "accept",
+        }
         logger.info(
-            "Completed MarketAnalysisAgent evidence_count=%s verdict=%s action=%s missing_dimensions=%s retry_count=%s revision_count=%s reason=%s",
+            "Completed MarketAnalysisAgent evidence_count=%s agent_action=%s missing_dimensions=%s",
             len(output.evidence),
-            search_evaluation["verdict"],
-            reflection["recommended_action"],
-            reflection["missing_dimensions"],
-            search_evaluation["retry_count"],
-            search_evaluation["revision_count"],
-            search_evaluation["last_reason"],
+            agent_decision["recommended_action"],
+            agent_decision["missing_dimensions"],
         )
         return {
             "market_analysis": {
                 "market_view": output.market_view,
                 "evidence": output.evidence,
                 "references": references,
-                "search_evaluation": search_evaluation,
-                "reflection": reflection,
+                "agent_decision": agent_decision,
+                "search_evaluation": state["market_analysis"]["search_evaluation"],
+                "reflection": state["market_analysis"]["reflection"],
                 "ready": True,
             }
         }

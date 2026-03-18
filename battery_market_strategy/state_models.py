@@ -57,6 +57,10 @@ class ReflectionState(TypedDict):
     revision_needed: bool
 
 
+class AgentDecisionState(ReflectionState):
+    pass
+
+
 class SearchEvaluationState(TypedDict):
     verdict: SearchVerdict
     retry_count: int
@@ -105,6 +109,7 @@ class MarketAnalysisState(TypedDict):
     market_view: str
     evidence: list[str]
     references: list[str]
+    agent_decision: AgentDecisionState
     search_evaluation: SearchEvaluationState
     reflection: ReflectionState
     ready: bool
@@ -117,6 +122,7 @@ class CompanyCoreAnalysisState(TypedDict):
     references: list[str]
     core_competitiveness: list[str]
     diversification_strategy: list[str]
+    agent_decision: AgentDecisionState
     search_evaluation: SearchEvaluationState
     reflection: ReflectionState
     ready: bool
@@ -143,10 +149,12 @@ class ComparisonState(TypedDict):
 class ReportState(TypedDict):
     title: str
     summary: str
+    markdown_body: str
     markdown_path: str
     pdf_path: str
     references: list[str]
     quality_check: dict[str, bool]
+    agent_decision: AgentDecisionState
     search_evaluation: SearchEvaluationState
     reflection: ReflectionState
     ready: bool
