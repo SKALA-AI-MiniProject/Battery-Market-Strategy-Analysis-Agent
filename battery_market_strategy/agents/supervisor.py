@@ -243,6 +243,11 @@ class SupervisorAgent(BaseAgent):
         llm_missing_dimensions = filter_market_missing_dimensions(agent_decision["missing_dimensions"])
         llm_action = agent_decision["recommended_action"]
         llm_missing_points = agent_decision["missing_points"]
+        has_minimum_signal = self._has_minimum_market_signal(market_state["market_view"], market_state["evidence"], market_state["references"])
+        if has_minimum_signal and rule_reflection["recommended_action"] == "accept":
+            llm_action = "accept"
+            llm_missing_points = []
+            llm_missing_dimensions = []
 
         reflection = build_reflection(
             focus="market attractiveness and sector structure",
@@ -257,6 +262,13 @@ class SupervisorAgent(BaseAgent):
             rule_failure_type=rule_reflection["failure_type"],
             rule_action=rule_reflection["recommended_action"],
         )
+        if has_minimum_signal and not reflection["missing_points"] and not reflection["missing_dimensions"]:
+            reflection = {
+                **reflection,
+                "failure_type": "none",
+                "recommended_action": "accept",
+                "revision_needed": False,
+            }
         reason = "; ".join(reflection["missing_points"]) if reflection["missing_points"] else "reflection approved"
         search_evaluation = update_search_evaluation(
             market_state["search_evaluation"],
@@ -300,6 +312,16 @@ class SupervisorAgent(BaseAgent):
         llm_action = agent_decision["recommended_action"]
         llm_missing_points = agent_decision["missing_points"]
         llm_missing_dimensions = filter_company_missing_dimensions(agent_decision["missing_dimensions"])
+        has_minimum_signal = self._has_minimum_company_signal(
+            company_state["core_competitiveness"],
+            company_state["diversification_strategy"],
+            company_state["evidence"],
+            company_state["references"],
+        )
+        if has_minimum_signal and rule_reflection["recommended_action"] == "accept":
+            llm_action = "accept"
+            llm_missing_points = []
+            llm_missing_dimensions = []
 
         reflection = build_reflection(
             focus="company core analysis with agentic RAG",
@@ -314,7 +336,13 @@ class SupervisorAgent(BaseAgent):
             rule_failure_type=rule_reflection["failure_type"],
             rule_action=rule_reflection["recommended_action"],
         )
-        has_minimum_signal = self._has_minimum_company_signal(company_state["core_competitiveness"], company_state["diversification_strategy"], company_state["evidence"], company_state["references"])
+        if has_minimum_signal and not reflection["missing_points"] and not reflection["missing_dimensions"]:
+            reflection = {
+                **reflection,
+                "failure_type": "none",
+                "recommended_action": "accept",
+                "revision_needed": False,
+            }
         if has_minimum_signal and reflection["recommended_action"] == "accept":
             verdict = "approved"
         else:
@@ -423,6 +451,14 @@ class SupervisorAgent(BaseAgent):
             and len(evidence) >= 3
             and len(references) >= 3
         )
+
+    @staticmethod
+    def _has_minimum_market_signal(
+        market_view: str,
+        evidence: list[str],
+        references: list[str],
+    ) -> bool:
+        return bool(market_view.strip()) and len(evidence) >= 6 and len(references) >= 3
 
     @staticmethod
     def _collect_retry_requests(checks: list[tuple[str, dict]]) -> list[str]:

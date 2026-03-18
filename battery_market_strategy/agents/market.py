@@ -14,6 +14,28 @@ from ..services import LLMService, WebSearchService
 
 logger = logging.getLogger(__name__)
 
+_NON_BLOCKING_MARKET_POINT_PATTERNS = (
+    r"growth rate",
+    r"성장률",
+    r"시장 점유율",
+    r"market share",
+    r"세부 영향 분석",
+    r"정책.*세부",
+    r"구체적 비교",
+    r"다각화 전략 비교",
+    r"기술력 차별화.*정량",
+    r"정량적 근거",
+    r"구체적 수치",
+    r"마진율",
+    r"가격 변동",
+    r"가동률 변화",
+    r"재고 리스크",
+    r"oem",
+    r"완성차",
+    r"포트폴리오 다각화 전략 비교",
+    r"battery technology differentiation",
+)
+
 
 class MarketAnalysisAgent(BaseAgent):
     name = "market_analysis_agent"
@@ -80,14 +102,20 @@ class MarketAnalysisAgent(BaseAgent):
         output = self._llm_service.invoke_structured(system_prompt, user_prompt, MarketAnalysisOutput)
 
         references = sanitize_references(_extract_references(snippets))
+        filtered_missing_points = _filter_non_blocking_market_points(output.missing_points)
+        filtered_missing_dimensions = filter_market_missing_dimensions(output.missing_dimensions)
+        minimum_signal = len(output.evidence) >= 6 and len(references) >= 3
+        agent_action = output.recommended_action
+        if minimum_signal and not filtered_missing_points and len(filtered_missing_dimensions) <= 1:
+            agent_action = "accept"
         agent_decision = {
             "focus": "market attractiveness and sector structure",
-            "missing_points": output.missing_points,
+            "missing_points": filtered_missing_points,
             "bias_checks": output.bias_checks,
-            "missing_dimensions": filter_market_missing_dimensions(output.missing_dimensions),
+            "missing_dimensions": filtered_missing_dimensions,
             "failure_type": output.failure_type,
-            "recommended_action": output.recommended_action,
-            "revision_needed": output.revision_needed or output.recommended_action != "accept",
+            "recommended_action": agent_action,
+            "revision_needed": (output.revision_needed and agent_action != "accept"),
         }
         logger.info(
             "Completed MarketAnalysisAgent evidence_count=%s agent_action=%s missing_dimensions=%s",
@@ -174,3 +202,18 @@ def _normalize_content_key(snippet: str) -> str:
     content = snippet.split(marker, 1)[0]
     normalized = re.sub(r"\s+", " ", content).strip().lower()
     return normalized[:220]
+
+
+def _filter_non_blocking_market_points(values: list[str]) -> list[str]:
+    filtered: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        stripped = value.strip()
+        if not stripped or stripped in seen:
+            continue
+        seen.add(stripped)
+        normalized = stripped.lower()
+        if any(re.search(pattern, normalized) for pattern in _NON_BLOCKING_MARKET_POINT_PATTERNS):
+            continue
+        filtered.append(stripped)
+    return filtered

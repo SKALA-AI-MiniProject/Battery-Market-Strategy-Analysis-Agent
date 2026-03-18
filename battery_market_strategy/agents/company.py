@@ -25,6 +25,10 @@ _DECISION_ACTION_PRIORITY = {
 _NON_BLOCKING_COMPANY_POINT_PATTERNS = (
     r"customer",
     r"고객사",
+    r"regional customer",
+    r"지역별 고객",
+    r"고객 분포",
+    r"customer distribution",
     r"market share",
     r"시장 점유율",
     r"competitor",
@@ -40,6 +44,40 @@ _NON_BLOCKING_COMPANY_POINT_PATTERNS = (
     r"공급망.*구체",
     r"quantitative",
     r"정량",
+    r"financial",
+    r"재무",
+    r"profitability",
+    r"수익성",
+    r"execution challenges",
+    r"execution risk",
+    r"constraints",
+    r"limitations",
+    r"리스크",
+    r"제약",
+    r"한계",
+    r"battery chemistry",
+    r"화학물질별",
+    r"lineup",
+    r"라인업",
+    r"global production",
+    r"global manufacturing",
+    r"production site",
+    r"manufacturing site",
+    r"site-specific",
+    r"거점별",
+    r"생산 거점",
+    r"지역별 생산",
+    r"생산능력.*지역",
+    r"capacity.*region",
+    r"capacity.*site",
+    r"new business",
+    r"new business lines",
+    r"비ev",
+    r"new business areas",
+    r"concrete examples beyond general mentions",
+    r"구체적 사례",
+    r"service and solutions",
+    r"매출 기여도",
     r"timeline",
     r"timeline",
     r"timelines",
@@ -124,11 +162,15 @@ class CompanyCorePortfolioAgent(BaseAgent):
             "Detailed customer names, service expansion, recycling strategy, or supply-chain specifics may be absent in a limited company PDF sample and should usually be treated as optional enrichment rather than hard blockers. "
             "Each core competitiveness point should explain both the fact and why it matters strategically. "
             "Each diversification point should specify the expansion direction, operating basis, and expected role in the portfolio. "
+            "Separate three things clearly when relevant: 1) current capability or disclosed fact, 2) management target or plan, 3) your strategic interpretation. "
+            "If a statement is a target, capacity plan, ambition, or announced direction rather than an already-secured outcome, describe it as a plan or target, not as an established fact. "
+            "Do not over-index on patent counts, headline capacity targets, or promotional technology language unless the evidence also explains commercialization, execution, or customer relevance. "
             "Use trusted web evidence only when it comes from high-confidence domains such as official company sites, government or public institutions, or major global news organizations. "
             "Do not rely on blogs, social posts, opinion summaries, or weak secondary commentary. "
             "Do not default to optimistic company framing. For each major strength or diversification claim, actively consider execution risk, constraints, delays, dependence, or downside conditions when the evidence supports them. "
             "If external trusted web evidence weakens or qualifies a company claim, reflect that tension rather than repeating the company-positive framing only. "
             "Fill missing_dimensions with any missing evidence buckets among technology/chemistry, manufacturing footprint, customer/product, ESS or non-EV expansion, and supply chain/recycling/service. "
+            "However, use missing_dimensions only for genuinely blocking evidence gaps. Do not mark optional detail, missing financial data, or lack of perfect quantification as blocking if a coherent best-effort company analysis is still possible. "
             "Use recommended_action=retry_retrieve when the evidence itself is too narrow, and recommended_action=retry_rewrite when the evidence exists but the synthesis is repetitive or weak. "
             "Set revision_needed=True only when recommended_action is not accept."
         )
@@ -142,9 +184,13 @@ class CompanyCorePortfolioAgent(BaseAgent):
             "같은 사실을 표현만 바꿔 반복하지 마.\n"
             "핵심 기술력 각 항목은 '무엇을 보유/실행하는가 + 왜 전략적으로 중요한가'까지 포함해라.\n"
             "다각화 전략 각 항목은 '어느 영역으로 확장하는가 + 그 확장의 기반이 무엇인가'까지 포함해라.\n"
+            "가능하면 각 회사에 대해 아래 질문에 답하는 재료가 되도록 써라: 이 회사의 moat는 무엇인가, 어디가 병목인가, 어떤 조건에서 우위가 약해지는가.\n"
+            "특허 수, 생산능력 목표, 시장 점유 목표 같은 항목은 그대로 칭찬 포인트로 쓰지 말고 실제 경쟁우위 연결고리가 있을 때만 의미를 부여해라.\n"
+            "이미 확보한 역량과 아직 계획/목표 단계인 항목을 혼동하지 마라.\n"
             "회사 PDF에 없는 정보를 웹 근거로 보강할 수는 있지만, 웹 근거는 PDF 주장을 검증·보완하는 수준으로만 사용하고 과장하지 마.\n"
             "핵심 경쟁력과 다각화 전략을 정리할 때, 가능하면 최소 1~2개의 제약 요인·실행 리스크·불확실성도 evidence에 포함해 일방적으로 긍정적인 서술을 피하라.\n"
             "evidence는 보고서 본문에서 바로 근거로 쓸 수 있도록 구체 fact statement 5개 이상을 목표로 하라.\n"
+            "근거가 충분하지 않아도 가능한 범위 안에서 가장 타당한 best-effort 분석을 제공하라. 단, 불확실한 항목은 불확실하다고 명시하라.\n"
             "모든 결론은 보수적으로 정리하고, 확인된 사실과 해석을 섞지 마.\n\n"
             f"회사 PDF 근거:\n{chunk_preview}\n\n"
             f"신뢰도 필터를 통과한 외부 웹 근거:\n{web_preview}"

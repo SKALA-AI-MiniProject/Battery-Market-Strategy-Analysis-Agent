@@ -22,7 +22,8 @@ class StrategicComparisonAgent(BaseAgent):
         system_prompt = (
             "You are a neutral strategist comparing LG Energy Solution and CATL. "
             "Use only the provided analysis inputs. Write all outputs in Korean. "
-            "Focus on strategic trade-offs, asymmetries, and likely consequences rather than repeating summaries."
+            "Focus on strategic trade-offs, asymmetries, and likely consequences rather than repeating summaries. "
+            "Do not treat management targets, patent counts, or capacity announcements as decisive advantages unless the input evidence also shows execution relevance."
         )
         user_prompt = (
             "시장 분석:\n"
@@ -44,7 +45,9 @@ class StrategicComparisonAgent(BaseAgent):
             "전략적 차이점, 강약점 비교, 종합 결론을 작성해.\n"
             "전략적 차이점은 1) 기술/제품 포지셔닝, 2) 지역/생산 전략, 3) 수익성·가격 경쟁, 4) 포트폴리오 확장 관점에서 도출하라.\n"
             "강약점 비교는 단순 재서술이 아니라 어떤 시장 환경에서 어느 회사가 상대적으로 유리한지까지 드러나야 한다.\n"
-            "결론은 '누가 무조건 우위'가 아니라 조건부 우위와 향후 관찰 포인트를 포함해야 한다."
+            "결론은 '누가 무조건 우위'가 아니라 조건부 우위와 향후 관찰 포인트를 포함해야 한다.\n"
+            "비교할 때는 1) 현재 확보된 역량, 2) 진행 중인 투자/계획, 3) 외부 환경 수혜 여부를 구분해라.\n"
+            "증거가 부족하면 과도한 우열 판단을 피하고, 어떤 추가 사실이 있으면 판단이 바뀌는지도 명시하라."
         )
         output = self._llm_service.invoke_structured(system_prompt, user_prompt, ComparisonOutput)
         references = sanitize_references(state["collected_references"])

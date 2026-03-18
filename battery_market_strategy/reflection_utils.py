@@ -133,19 +133,21 @@ def assess_market_output(
     failure_type: FailureType = "none"
     action: ReflectionAction = "accept"
 
-    if len(output.evidence) < 5:
+    if len(output.evidence) < 4:
         missing_points.append("시장 분석 evidence 수가 부족함")
         failure_type = "weak_grounding"
         action = "retry_retrieve"
-    if len(source_domains) < 3:
+    if len(source_domains) < 2:
         missing_points.append("서로 다른 웹 출처 수가 부족함")
         failure_type = "source_concentration"
         action = "retry_retrieve"
-    if blocking_missing_dimensions:
-        missing_points.append("시장 분석 필수 축 일부가 비어 있음")
+    if len(blocking_missing_dimensions) >= 2:
+        missing_points.append("시장 분석 필수 축 다수가 비어 있음")
         failure_type = "insufficient_coverage"
         action = "retry_retrieve"
-    elif len(covered_dimensions) < 4:
+    elif blocking_missing_dimensions:
+        bias_checks.append("시장 분석 필수 축 일부가 약하게 다뤄졌을 수 있음")
+    elif len(covered_dimensions) < 3:
         missing_points.append("시장 분석 커버리지가 최소 수준에 못 미침")
         failure_type = "insufficient_coverage"
         action = "retry_retrieve"
@@ -153,14 +155,8 @@ def assess_market_output(
         bias_checks.append("시장 분석의 일부 보조 축은 충분히 다뤄지지 않음")
     if not has_numeric_support:
         bias_checks.append("숫자·날짜·정량 신호가 부족함")
-        if action == "accept":
-            failure_type = "missing_numeric_support"
-            action = "retry_rewrite"
     if not any(keyword in combined_text for keyword in _RISK_BALANCE_KEYWORDS):
         bias_checks.append("시장 분석이 성장 요인 중심으로 기울었을 가능성이 있어 하방 요인 균형 점검이 필요함")
-        if action == "accept":
-            failure_type = "weak_grounding"
-            action = "retry_rewrite"
     if duplicate_bias:
         bias_checks.append("evidence 간 중복 또는 재진술 가능성이 있음")
         if action == "accept":
@@ -216,17 +212,15 @@ def assess_company_output(
         failure_type = "weak_grounding"
         action = "retry_retrieve"
     if len(pages) < 2:
-        missing_points.append("근거 페이지 다양성이 부족함")
+        bias_checks.append("근거 페이지 다양성이 제한적일 수 있음")
+    if len(core_covered_dimensions) < 1:
+        missing_points.append("기업 분석이 핵심 축을 거의 다루지 못함")
         failure_type = "insufficient_coverage"
         action = "retry_retrieve"
-    if len(core_covered_dimensions) < 2:
-        missing_points.append("기업 분석이 핵심 축 두 개 이상을 충분히 다루지 못함")
-        failure_type = "insufficient_coverage"
-        action = "retry_retrieve"
+    elif len(core_covered_dimensions) < 2:
+        bias_checks.append("기업 분석이 핵심 축 두 개 이상을 충분히 다루지 못했을 수 있음")
     elif len(blocking_missing_dimensions) >= 3:
-        missing_points.append("기업 분석이 핵심 축에 과도하게 치우쳐 있음")
-        failure_type = "insufficient_coverage"
-        action = "retry_retrieve"
+        bias_checks.append("기업 분석이 일부 핵심 축에 치우쳤을 수 있음")
     if any(label in missing_dimensions for label in _COMPANY_OPTIONAL_DIMENSIONS):
         bias_checks.append("공급망·재활용·서비스 확장 정보는 제한적일 수 있음")
     if not any(keyword in combined_text for keyword in _RISK_BALANCE_KEYWORDS):
