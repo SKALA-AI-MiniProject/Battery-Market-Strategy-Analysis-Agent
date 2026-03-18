@@ -104,7 +104,7 @@ Battery-Market-Strategy-Analysis-Agent/
 │   ├── battery_strategy_report.pdf          # 기본 테마 PDF
 │   ├── battery_strategy_report_premium.pdf  # 프리미엄 UI 테마 PDF (선택)
 │   └── logs/
-├── poc_graph/                   # 메인 패키지
+├── battery_market_strategy/    # 메인 패키지
 │   ├── agents/                  # Agent 모듈
 │   │   ├── base.py
 │   │   ├── company.py           # LGES/CATL Core Portfolio
@@ -122,10 +122,10 @@ Battery-Market-Strategy-Analysis-Agent/
 │   ├── execution_state.py       # 검색 평가·리트라이 로직
 │   ├── spec.py                  # 그래프 노드/엣지/메르마이드/프롬프트 상수
 │   ├── builder.py               # LangGraph 빌드
-│   ├── runner.py                # 시뮬레이션 실행·트레이스
+│   ├── graph.py                 # 그래프 정의
 │   ├── registry.py              # 서비스·에이전트 의존성 등록
-│   ├── __main__.py              # 실행 진입점 (python -m poc_graph)
-│   └── render_pdf.py             # MD → 프리미엄 UI PDF (standalone)
+│   ├── __main__.py              # 실행 진입점 (python -m battery_market_strategy)
+│   └── render_pdf.py            # MD → 프리미엄 UI PDF (standalone)
 ├── requirements.txt
 ├── .env / key.env               # OPENAI_API_KEY, TAVILY_API_KEY 등 (참고: key.env 우선)
 └── README.md
@@ -136,9 +136,15 @@ Battery-Market-Strategy-Analysis-Agent/
 - **기본 PDF** (`battery_strategy_report.pdf`): 파이프라인 실행 시 생성. 블루/화이트 투자 보고서(SMIC) 스타일.
 - **프리미엄 UI PDF** (`battery_strategy_report.pdf`): 마크다운만 읽어서 동일 파일명으로 프리미엄 테마 PDF 생성.
   ```bash
-  python -m poc_graph.render_pdf
-  python -m poc_graph.render_pdf path/to/report.md
+  python -m battery_market_strategy.render_pdf
+  python -m battery_market_strategy.render_pdf path/to/report.md
   ```
+
+프로젝트 실행 (저장소 루트에서):
+
+```bash
+python -m battery_market_strategy
+```
 
 ## Contributors
 

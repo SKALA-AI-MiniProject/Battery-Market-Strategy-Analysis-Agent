@@ -1,8 +1,8 @@
 """마크다운 보고서 → PDF 생성 (프리미엄 UI 테마).
 
 사용법 (프로젝트 루트에서):
-  python -m poc_graph.render_pdf
-  python -m poc_graph.render_pdf path/to/report.md
+  python -m battery_market_strategy.render_pdf
+  python -m battery_market_strategy.render_pdf path/to/report.md
 
 출력: output/battery_strategy_report.pdf (기존 MD는 수정하지 않음)
 """

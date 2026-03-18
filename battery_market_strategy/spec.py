@@ -8,10 +8,10 @@ FIXED_USER_PROMPT = (
 )
 
 DEFAULT_REPORT_TITLE = "배터리 시장 전략 보고서: LG에너지솔루션 vs CATL"
-MAX_STEP_COUNT = 40
+MAX_STEP_COUNT = 30
 INITIAL_SEARCH_MAX_RETRY = 2
 INITIAL_SEARCH_MAX_REVISION = 2
-REPORT_MAX_RETRY = 1
+REPORT_MAX_RETRY = 2
 REPORT_MAX_REVISION = 1
 
 GRAPH_NODES = [
@@ -27,6 +27,7 @@ GRAPH_NODES = [
     "swot_parallel_join",
     "strategic_comparison_agent",
     "pdf_report_agent",
+    "finalize",
 ]
 
 
@@ -50,7 +51,8 @@ GRAPH_EDGES = [
     ("strategic_comparison_agent", "supervisor_agent"),
     ("supervisor_agent", "pdf_report_agent"),
     ("pdf_report_agent", "supervisor_agent"),
-    ("supervisor_agent", "END"),
+    ("supervisor_agent", "finalize"),
+    ("finalize", "END"),
 ]
 
 
@@ -82,7 +84,8 @@ flowchart TD
     supervisor --> report[PDF Report Agent]
     report --> supervisor
 
-    supervisor --> END([END])
+    supervisor --> finalize[Finalize]
+    finalize --> END([END])
 """.strip()
 
 
@@ -107,5 +110,6 @@ SUPERVISOR_ROUTE_MAP = {
     "swot_parallel": "swot_parallel_fanout",
     "comparison": "strategic_comparison_agent",
     "reporting": "pdf_report_agent",
-    "done": "end",
+    "done": "finalize",
+    "failed": "finalize",
 }

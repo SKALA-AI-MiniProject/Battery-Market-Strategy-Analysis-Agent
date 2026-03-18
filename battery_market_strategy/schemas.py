@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pydantic import BaseModel, Field
+from typing import Literal
 
 
 class QueryPlanOutput(BaseModel):
@@ -11,6 +12,17 @@ class RetrievalReflectionOutput(BaseModel):
     follow_up_queries: list[str] = Field(default_factory=list)
     missing_points: list[str] = Field(default_factory=list)
     bias_checks: list[str] = Field(default_factory=list)
+    missing_dimensions: list[str] = Field(default_factory=list)
+    failure_type: Literal[
+        "none",
+        "insufficient_coverage",
+        "redundant_evidence",
+        "weak_grounding",
+        "missing_numeric_support",
+        "source_concentration",
+        "format_issue",
+    ] = "none"
+    recommended_action: Literal["accept", "retry_rewrite", "retry_retrieve", "fail"] = "accept"
     revision_needed: bool = False
 
 
@@ -20,6 +32,17 @@ class MarketAnalysisOutput(BaseModel):
     references: list[str] = Field(default_factory=list)
     missing_points: list[str] = Field(default_factory=list)
     bias_checks: list[str] = Field(default_factory=list)
+    missing_dimensions: list[str] = Field(default_factory=list)
+    failure_type: Literal[
+        "none",
+        "insufficient_coverage",
+        "redundant_evidence",
+        "weak_grounding",
+        "missing_numeric_support",
+        "source_concentration",
+        "format_issue",
+    ] = "none"
+    recommended_action: Literal["accept", "retry_rewrite", "retry_retrieve", "fail"] = "accept"
     revision_needed: bool = False
 
 
@@ -30,6 +53,17 @@ class CompanyAnalysisOutput(BaseModel):
     references: list[str] = Field(default_factory=list)
     missing_points: list[str] = Field(default_factory=list)
     bias_checks: list[str] = Field(default_factory=list)
+    missing_dimensions: list[str] = Field(default_factory=list)
+    failure_type: Literal[
+        "none",
+        "insufficient_coverage",
+        "redundant_evidence",
+        "weak_grounding",
+        "missing_numeric_support",
+        "source_concentration",
+        "format_issue",
+    ] = "none"
+    recommended_action: Literal["accept", "retry_rewrite", "retry_retrieve", "fail"] = "accept"
     revision_needed: bool = False
 
 
@@ -55,6 +89,17 @@ class ReportOutput(BaseModel):
     references: list[str] = Field(default_factory=list)
     missing_points: list[str] = Field(default_factory=list)
     bias_checks: list[str] = Field(default_factory=list)
+    missing_dimensions: list[str] = Field(default_factory=list)
+    failure_type: Literal[
+        "none",
+        "insufficient_coverage",
+        "redundant_evidence",
+        "weak_grounding",
+        "missing_numeric_support",
+        "source_concentration",
+        "format_issue",
+    ] = "none"
+    recommended_action: Literal["accept", "retry_rewrite", "retry_retrieve", "fail"] = "accept"
     revision_needed: bool = False
 
 

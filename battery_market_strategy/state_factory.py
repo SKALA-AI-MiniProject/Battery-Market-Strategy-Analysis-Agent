@@ -28,6 +28,9 @@ def make_reflection_state(focus: str) -> ReflectionState:
         focus=focus,
         missing_points=[],
         bias_checks=[],
+        missing_dimensions=[],
+        failure_type="none",
+        recommended_action="accept",
         revision_needed=False,
     )
 
@@ -160,4 +163,6 @@ def make_initial_state(raw_user_query: str, config: AppConfig) -> GraphState:
             reflection=make_reflection_state("report quality check before PDF generation"),
             ready=False,
         ),
+        collected_references=[],
+        execution_trace=[],
     )
