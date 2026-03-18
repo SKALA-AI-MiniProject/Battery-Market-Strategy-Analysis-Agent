@@ -160,4 +160,6 @@ def make_initial_state(raw_user_query: str, config: AppConfig) -> GraphState:
             reflection=make_reflection_state("report quality check before PDF generation"),
             ready=False,
         ),
+        collected_references=[],
+        execution_trace=[],
     )

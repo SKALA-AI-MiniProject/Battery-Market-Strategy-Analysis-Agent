@@ -8,7 +8,7 @@ from .config import AppConfig
 
 def setup_logging(config: AppConfig) -> None:
     root_logger = logging.getLogger()
-    configured_path = getattr(root_logger, "_poc_graph_log_file", None)
+    configured_path = getattr(root_logger, "_battery_market_strategy_log_file", None)
     if configured_path == str(config.log_file_path):
         return
 
@@ -30,4 +30,4 @@ def setup_logging(config: AppConfig) -> None:
 
     root_logger.addHandler(stream_handler)
     root_logger.addHandler(file_handler)
-    setattr(root_logger, "_poc_graph_log_file", str(config.log_file_path))
+    setattr(root_logger, "_battery_market_strategy_log_file", str(config.log_file_path))

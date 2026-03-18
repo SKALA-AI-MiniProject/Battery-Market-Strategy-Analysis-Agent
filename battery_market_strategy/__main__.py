@@ -1,4 +1,4 @@
-from .runner import main
+from .graph import main
 
 
 if __name__ == "__main__":
