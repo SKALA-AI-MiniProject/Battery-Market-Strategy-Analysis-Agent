@@ -47,6 +47,8 @@ def load_config() -> AppConfig:
     package_root = Path(__file__).resolve().parent
     project_root = package_root.parent
 
+    # Load .env first, then key.env (key.env overrides if present)
+    load_dotenv(project_root / ".env")
     load_dotenv(project_root / "key.env")
 
     default_data_dir = project_root / "data"

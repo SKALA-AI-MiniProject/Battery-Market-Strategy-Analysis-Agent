@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -27,6 +28,10 @@ class EnsureIndexResult:
 
 
 class CompanyVectorStoreService:
+    """FAISS + HuggingFace embeddings. Use a lock to avoid segfaults when called from multiple threads (e.g. parallel agents on Apple Silicon)."""
+
+    _embedding_lock = threading.Lock()
+
     def __init__(self, config: AppConfig) -> None:
         self._config = config
         self._config.faiss_root.mkdir(parents=True, exist_ok=True)
@@ -69,10 +74,11 @@ class CompanyVectorStoreService:
                 index_dir=index_dir,
             )
 
-        logger.info("Building FAISS index company=%s pdf=%s", company_id, pdf_path)
-        documents = self._load_and_split_pdf(pdf_path, company_id)
-        vector_store = FAISS.from_documents(documents, self._embeddings)
-        vector_store.save_local(str(index_dir))
+        with self._embedding_lock:
+            logger.info("Building FAISS index company=%s pdf=%s", company_id, pdf_path)
+            documents = self._load_and_split_pdf(pdf_path, company_id)
+            vector_store = FAISS.from_documents(documents, self._embeddings)
+            vector_store.save_local(str(index_dir))
         manifest = {
             "company_id": company_id,
             "document_hash": document_hash,
@@ -91,12 +97,13 @@ class CompanyVectorStoreService:
 
     def retrieve(self, index_dir: Path, query: str, top_k: int) -> list[tuple[Document, float]]:
         logger.info("Retrieving from FAISS index_dir=%s top_k=%s query=%s", index_dir, top_k, query)
-        vector_store = FAISS.load_local(
-            str(index_dir),
-            self._embeddings,
-            allow_dangerous_deserialization=True,
-        )
-        return vector_store.similarity_search_with_score(query, k=top_k)
+        with self._embedding_lock:
+            vector_store = FAISS.load_local(
+                str(index_dir),
+                self._embeddings,
+                allow_dangerous_deserialization=True,
+            )
+            return vector_store.similarity_search_with_score(query, k=top_k)
 
     def _load_and_split_pdf(self, pdf_path: Path, company_id: str) -> list[Document]:
         loader = PyPDFLoader(str(pdf_path))

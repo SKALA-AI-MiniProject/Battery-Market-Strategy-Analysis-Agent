@@ -56,3 +56,9 @@ class ReportOutput(BaseModel):
     missing_points: list[str] = Field(default_factory=list)
     bias_checks: list[str] = Field(default_factory=list)
     revision_needed: bool = False
+
+
+class PDFReadyMarkdownOutput(BaseModel):
+    """Structured output for PDF conversion stage (explicit schema)."""
+
+    markdown_body: str = Field(description="Normalized markdown body for PDF renderer input")
