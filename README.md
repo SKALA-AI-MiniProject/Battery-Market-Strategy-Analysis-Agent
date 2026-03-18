@@ -131,7 +131,7 @@ flowchart TD
 | **LGES / CATL Core Portfolio Agent** | 각 회사의 PDF를 FAISS로 인덱싱하고 Agentic RAG를 수행해 핵심 기술력과 다각화 전략을 추출합니다. 필요 시 외부 웹 반대 증거 스니펫을 함께 활용해 편향을 줄입니다. |
 | **LGES / CATL SWOT Agent** | 앞 단계에서 승인된 시장 분석과 해당 회사의 코어 분석 결과를 입력으로 받아 강점, 약점, 기회, 위협을 구조화 출력으로 생성합니다. |
 | **Strategic Comparison Agent** | 시장, 양사 코어, 양사 SWOT 결과를 모두 종합해 전략적 차이와 강약점 비교, 종합 결론을 작성합니다. |
-| **PDF Report Agent** | 위 모든 분석을 바탕으로 보고서 제목, 요약, 마크다운 본문을 생성하고, ReportLab으로 MD와 PDF 파일을 저장합니다. 저장 후에는 품질 체크와 `search_evaluation` 업데이트까지 수행합니다. |
+| **PDF Report Agent** | 위 모든 분석을 바탕으로 보고서 제목, 요약, 마크다운 본문을 생성하고, ReportLab으로 MD와 PDF 파일을 저장합니다. 저장 후에는 `quality_check`와 `agent_decision`을 출력에 포함시키며, Supervisor가 이를 바탕으로 `search_evaluation`을 업데이트하고 재시도 여부를 결정합니다. |
 
 ---
 
@@ -222,19 +222,28 @@ Battery-Market-Strategy-Analysis-Agent/
 │   ├── battery_strategy_report.md
 │   ├── battery_strategy_report.pdf
 │   └── logs/
+├── .cache/                    # FAISS 인덱스 캐시 (SHA-256 해시 기반 재사용)
+│   └── battery_market_strategy/faiss/
+│       ├── lges/              # LGES FAISS 인덱스 (index.faiss, index.pkl, manifest.json)
+│       └── catl/              # CATL FAISS 인덱스
 ├── battery_market_strategy/   # 메인 패키지
 │   ├── agents/                # Agent 모듈 (base, company, market, swot, comparison, report, supervisor)
 │   ├── orchestration/         # 병렬 Fan-out/Join 노드
 │   ├── services/              # RAG, 벡터스토어, LLM, 웹검색, 리포트
 │   ├── config.py              # 환경 변수 기반 설정
 │   ├── schemas.py             # Pydantic 출력 스키마
-│   ├── state_models.py        # 그래프 상태 타입
+│   ├── state_models.py        # 그래프 상태 타입 (WorkflowPhase, SearchVerdict, GraphState 등)
 │   ├── state_factory.py       # 초기 상태 생성
-│   ├── execution_state.py     # 검색 평가, 리트라이 로직
+│   ├── state.py               # 상태 모듈 __all__ export
+│   ├── nodes.py               # 에이전트/오케스트레이션 __all__ export
+│   ├── execution_state.py     # 검색 평가, 리트라이 로직 (SearchEvaluationState)
+│   ├── reflection_utils.py    # 규칙 기반 반성 함수 (assess_*, build_reflection)
+│   ├── reference_utils.py     # 참고문헌 정제 및 렌더링 유틸
+│   ├── logging_utils.py       # stdout + 파일 로깅 설정
 │   ├── spec.py                # 그래프 노드/엣지/프롬프트 상수
 │   ├── builder.py             # LangGraph 빌드
 │   ├── graph.py               # 그래프 정의 및 main 진입
-│   ├── registry.py            # 서비스, 에이전트 의존성 등록
+│   ├── registry.py            # 서비스, 에이전트 의존성 등록 (GraphRegistry)
 │   ├── __main__.py            # 실행 진입점 (python -m battery_market_strategy)
 │   └── render_pdf.py          # MD → 프리미엄 UI PDF (standalone)
 ├── requirements.txt
@@ -280,5 +289,6 @@ Battery-Market-Strategy-Analysis-Agent/
 
 ## 10. Contributors
 
-- 최우석 : PDF Parsing, Retrieval Agent
-- 임수현 : Prompt Engineering, Agent Design
+- 최우석 : Multi-Agent 아키텍처 설계, 시장분석/기업별 포트폴리오 다각화 조사 에이전트 구현
+- 임수현 : Multi-Agent 아키텍처 설계, SWOT 분석/전략 분석 보고서 작성 에이전트 구현
+
