@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import math
 from datetime import datetime
 from pathlib import Path
 from xml.sax.saxutils import escape
@@ -88,19 +87,6 @@ class SMICHeaderFlowable(Flowable):
         canv.drawRightString(w - 5 * mm, h - 15 * mm, self._report_label)
 
 
-class GrayDividerFlowable(Flowable):
-    """회색 가로 구분선 (SMIC 오른쪽 열 스타일)."""
-
-    def wrap(self, avail_width: float, avail_height: float) -> tuple[float, float]:
-        self._w = avail_width
-        return (avail_width, 4)
-
-    def draw(self) -> None:
-        self.canv.setStrokeColor(_COLOR_DIVIDER)
-        self.canv.setLineWidth(1.0)
-        self.canv.line(0, 2, self._w, 2)
-
-
 class SMICRightSidebarFlowable(Flowable):
     """SMIC 스타일 오른쪽 열: BUY 박스 + 주가/요약 표 + 구분선 + 출처."""
 
@@ -161,31 +147,6 @@ class SMICRightSidebarFlowable(Flowable):
 
 
 logger = logging.getLogger(__name__)
-
-
-def _hexagon_path(cx: float, cy: float, r: float) -> list[tuple[float, float]]:
-    """Flat-top hexagon vertices (clockwise from top)."""
-    h = r * math.sqrt(3) / 2
-    return [
-        (cx, cy + r),
-        (cx + h, cy + r / 2),
-        (cx + h, cy - r / 2),
-        (cx, cy - r),
-        (cx - h, cy - r / 2),
-        (cx - h, cy + r / 2),
-    ]
-
-
-def _draw_polygon(canv, points: list[tuple[float, float]], fill: bool = True, stroke: bool = True) -> None:
-    """Draw a closed polygon with ReportLab path object (moveTo/lineTo + drawPath)."""
-    if not points:
-        return
-    path = canv.beginPath()
-    path.moveTo(points[0][0], points[0][1])
-    for x, y in points[1:]:
-        path.lineTo(x, y)
-    path.close()
-    canv.drawPath(path, stroke=stroke, fill=fill)
 
 
 def _wrap_text(text: str, font_name: str, font_size: float, max_width: float, max_lines: int = 12) -> list[str]:
@@ -1266,118 +1227,6 @@ class MarketBackgroundKPIBoxesFlowable(Flowable):
             canv.restoreState()
 
 
-class PremiumMarketAnalysis(Flowable):
-    """프리미엄: 시장 분석 3카드."""
-
-    def __init__(self, driver1: str, driver2: str, driver3: str, font_name: str, avail_width: float) -> None:
-        super().__init__()
-        self.driver1 = driver1
-        self.driver2 = driver2
-        self.driver3 = driver3
-        self.font_name = font_name
-        self.avail_width = avail_width
-
-    def wrap(self, avail_width: float, avail_height: float) -> tuple[float, float]:
-        self._width = min(avail_width, self.avail_width)
-        self._height = 58 * mm
-        return (self._width, self._height)
-
-    def draw(self) -> None:
-        canv = self.canv
-        w, h = self._width, self._height
-        pad = 6 * mm
-        box_w = (w - pad * 4) / 3
-        font_name = self.font_name
-        font_size = 9
-        title_size = 11
-        titles = ["시장 성장", "수익성 압박", "정책·현지화"]
-        contents = [self.driver1, self.driver2, self.driver3]
-        accents = [_PREM_ACCENT_TEAL, _PREM_ACCENT_GOLD, colors.HexColor("#0284C7")]
-        bgs = [_PREM_ACCENT_TEAL_SOFT, _PREM_ACCENT_GOLD_SOFT, colors.HexColor("#E0F2FE")]
-        for i in range(3):
-            x0 = pad + i * (box_w + pad)
-            box_h = h - pad * 2
-            canv.saveState()
-            canv.setFillColor(bgs[i])
-            canv.setStrokeColor(_PREM_BORDER_SOFT)
-            canv.setLineWidth(0.6)
-            canv.roundRect(x0, pad, box_w, box_h, 6, fill=1, stroke=1)
-            canv.setFillColor(accents[i])
-            th = 12 * mm
-            canv.roundRect(x0, pad + box_h - th, box_w, th, 0, fill=1, stroke=0)
-            canv.setFillColor(_PREM_WHITE)
-            canv.setFont(font_name, title_size)
-            cx = x0 + box_w / 2
-            canv.drawCentredString(cx, pad + box_h - th + 3.5 * mm, titles[i])
-            canv.setFillColor(_PREM_SLATE)
-            canv.setFont(font_name, font_size)
-            text_w = box_w - 10
-            lines = _wrap_text(contents[i], font_name, font_size, text_w)
-            for j, line in enumerate(lines[:3]):
-                canv.drawCentredString(cx, pad + box_h - th - 6 * mm - j * (font_size + 4), _truncate_line_to_width(line, font_name, font_size, text_w))
-            canv.restoreState()
-
-
-class PremiumCompanyComparison(Flowable):
-    """프리미엄: LGES vs CATL 2열 카드."""
-
-    def __init__(
-        self,
-        lges_bullets: list[str],
-        catl_bullets: list[str],
-        font_name: str,
-        avail_width: float,
-    ) -> None:
-        super().__init__()
-        self.lges_bullets = lges_bullets[:6]
-        self.catl_bullets = catl_bullets[:6]
-        self.font_name = font_name
-        self.avail_width = avail_width
-
-    def wrap(self, avail_width: float, avail_height: float) -> tuple[float, float]:
-        self._width = min(avail_width, self.avail_width)
-        self._height = 80 * mm
-        return (self._width, self._height)
-
-    def draw(self) -> None:
-        canv = self.canv
-        w, h = self._width, self._height
-        pad = 7 * mm
-        col_w = (w - pad * 3) / 2
-        font_name = self.font_name
-        font_size = 9
-        title_size = 12
-        line_ht = font_size + 7
-        purple = colors.HexColor("#5B21B6")
-        for col, (title, bullets, header_c, bg_c) in enumerate([
-            ("LG Energy Solution", self.lges_bullets, _PREM_ACCENT_TEAL, _PREM_ACCENT_TEAL_SOFT),
-            ("CATL", self.catl_bullets, purple, colors.HexColor("#F5F3FF")),
-        ]):
-            x0 = pad + col * (col_w + pad)
-            box_h = h - pad * 2
-            canv.saveState()
-            canv.setFillColor(bg_c)
-            canv.setStrokeColor(_PREM_BORDER_SOFT)
-            canv.setLineWidth(0.6)
-            canv.roundRect(x0, pad, col_w, box_h, 6, fill=1, stroke=1)
-            th = 14 * mm
-            canv.setFillColor(header_c)
-            canv.roundRect(x0, pad + box_h - th, col_w, th, 0, fill=1, stroke=0)
-            canv.setFillColor(_PREM_WHITE)
-            canv.setFont(font_name, title_size)
-            canv.drawString(x0 + 8, pad + box_h - th + 3.5 * mm, title)
-            canv.setFillColor(_PREM_SLATE)
-            canv.setFont(font_name, font_size)
-            text_w = col_w - 16
-            for i, b in enumerate(bullets[:6]):
-                y_pos = pad + box_h - th - 10 * mm - i * line_ht
-                if y_pos < pad + 8:
-                    break
-                line = _truncate_line_to_width(b, font_name, font_size, text_w - 8)
-                canv.drawString(x0 + 8, y_pos, "• " + line)
-            canv.restoreState()
-
-
 class TwoColumnSWOTFlowable(Flowable):
     """프리미엄: 좌측 LGES SWOT, 우측 CATL SWOT."""
 
@@ -1495,80 +1344,6 @@ class DarkFooterFlowable(Flowable):
         self.canv.setFont(self.font_name, 8)
         self.canv.drawCentredString(self._width / 2, 4 * mm, self.text)
         self.canv.restoreState()
-
-
-class PremiumStrategicConclusion(Flowable):
-    """프리미엄: 전략 결론 2카드 + 공통 과제."""
-
-    def __init__(self, conclusion_text: str, font_name: str, avail_width: float) -> None:
-        super().__init__()
-        self.conclusion_text = conclusion_text
-        self.font_name = font_name
-        self.avail_width = avail_width
-
-    def wrap(self, avail_width: float, avail_height: float) -> tuple[float, float]:
-        self._width = min(avail_width, self.avail_width)
-        self._height = 72 * mm
-        return (self._width, self._height)
-
-    def draw(self) -> None:
-        canv = self.canv
-        w, h = self._width, self._height
-        pad = 6 * mm
-        col_w = (w - pad * 3) / 2
-        font_name = self.font_name
-        font_size = 10
-        title_size = 11
-        line_ht = font_size + 6
-        if "반면" in self.conclusion_text:
-            parts = self.conclusion_text.split("반면", 1)
-            lges_text = parts[0].strip()
-            rest = parts[1].strip() if len(parts) > 1 else ""
-            for sep in ("두 기업", "공통", "향후"):
-                idx = rest.find(sep)
-                if idx >= 0:
-                    catl_text = rest[:idx].strip()
-                    common_text = rest[idx:].strip()
-                    break
-            else:
-                catl_text = rest
-                common_text = ""
-        else:
-            lges_text = self.conclusion_text[: min(80, len(self.conclusion_text))]
-            catl_text = self.conclusion_text[min(80, len(self.conclusion_text)) : min(160, len(self.conclusion_text))]
-            common_text = ""
-        card_top = h - pad - 18
-        card_h = 28 * mm
-        for col, (label, text, header_c) in enumerate([
-            ("LGES 전략 요약", lges_text, _PREM_ACCENT_TEAL),
-            ("CATL 전략 요약", catl_text, colors.HexColor("#5B21B6")),
-        ]):
-            x0 = pad + col * (col_w + pad)
-            canv.saveState()
-            canv.setFillColor(_PREM_CREAM_DARK)
-            canv.setStrokeColor(_PREM_BORDER_SOFT)
-            canv.setLineWidth(0.6)
-            canv.roundRect(x0, card_top - card_h, col_w, card_h, 6, fill=1, stroke=1)
-            canv.setFillColor(header_c)
-            canv.setFont(font_name, title_size)
-            canv.drawString(x0 + 8, card_top - 14, label)
-            canv.setFillColor(_PREM_SLATE)
-            canv.setFont(font_name, font_size)
-            tw = col_w - 16
-            lines = _wrap_text(text, font_name, font_size, tw)
-            for j, line in enumerate(lines[:4]):
-                canv.drawString(x0 + 8, card_top - 28 - j * line_ht, _truncate_line_to_width(line, font_name, font_size, tw))
-            canv.restoreState()
-        common_bottom = 20 * mm
-        if common_text:
-            canv.setFillColor(_PREM_SLATE_LIGHT)
-            canv.setFont(font_name, title_size)
-            canv.drawString(pad, common_bottom + 14, "공통 과제")
-            canv.setFont(font_name, font_size)
-            canv.setFillColor(_PREM_SLATE)
-            common_lines = _wrap_text(common_text, font_name, font_size, w - pad * 2)
-            for j, line in enumerate(common_lines[:3]):
-                canv.drawString(pad, common_bottom - j * line_ht, _truncate_line_to_width(line, font_name, font_size, w - pad * 2))
 
 
 class PremiumReportService:
