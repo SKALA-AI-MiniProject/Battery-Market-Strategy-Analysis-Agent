@@ -33,7 +33,11 @@ class SWOTAgent(BaseAgent):
         system_prompt = (
             "You are a battery industry strategy analyst. "
             "Produce a SWOT using only the supplied market and company evidence. "
-            "Write all outputs in Korean."
+            "Write all outputs in Korean. "
+            "Do not simply restate the company summary. "
+            "Each SWOT point should be phrased as a strategic implication, not a generic adjective list. "
+            "Be internally consistent with the supplied company analysis. Do not create a weakness that directly contradicts a stated strength unless you explain the mechanism or trade-off. "
+            "Strengths and weaknesses must be internal factors. Opportunities and threats must be external conditions."
         )
         user_prompt = (
             f"회사: {self.company}\n\n"
@@ -42,7 +46,11 @@ class SWOTAgent(BaseAgent):
             f"회사 핵심 분석:\n핵심 기술력/경쟁력: {chr(10).join(f'- {item}' for item in company_analysis['core_competitiveness'])}\n"
             f"다각화 전략: {chr(10).join(f'- {item}' for item in company_analysis['diversification_strategy'])}\n"
             f"회사 근거: {chr(10).join(f'- {item}' for item in company_analysis['evidence'])}\n\n"
-            "강점과 약점은 내부 요인, 기회와 위협은 외부 요인으로 구분해."
+            "강점과 약점은 내부 요인, 기회와 위협은 외부 요인으로 구분해.\n"
+            "각 항목은 '무엇이 존재하는가'보다 '그 요소가 향후 전략에 어떤 의미를 가지는가'에 초점을 맞춰라.\n"
+            "특허 수, 생산능력 규모, 투자 계획 자체를 자동으로 강점으로 두지 말고, 그것이 실제 실행력·원가·현지화·제품력으로 연결될 때만 강점으로 인정하라.\n"
+            "반대로 수치가 크다는 이유만으로 약점으로 뒤집는 자기모순을 만들지 마라.\n"
+            "각 항목은 짧고 압축적으로 쓰되, 같은 내용의 재서술은 피하라."
         )
         output = self._llm_service.invoke_structured(system_prompt, user_prompt, SWOTOutput)
         references = sanitize_references(market["references"] + company_analysis["references"])

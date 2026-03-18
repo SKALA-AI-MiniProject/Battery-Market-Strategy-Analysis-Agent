@@ -2,22 +2,86 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+import re
 
 from .base import BaseAgent
 from ..config import AppConfig
-from ..execution_state import is_approved, update_search_evaluation
-from ..reflection_utils import (
-    assess_company_output,
-    build_reflection,
-    filter_company_missing_dimensions,
-    reflection_action_to_verdict,
-)
+from ..execution_state import is_approved
+from ..reflection_utils import filter_company_missing_dimensions
 from ..reference_utils import sanitize_references
 from ..schemas import CompanyAnalysisOutput
 from ..state_models import GraphState
-from ..services import AgenticRAGService, CompanyVectorStoreService, LLMService
+from ..services import AgenticRAGService, CompanyVectorStoreService, LLMService, WebSearchService
 
 logger = logging.getLogger(__name__)
+
+_DECISION_ACTION_PRIORITY = {
+    "accept": 0,
+    "retry_rewrite": 1,
+    "retry_retrieve": 2,
+    "fail": 3,
+}
+
+_NON_BLOCKING_COMPANY_POINT_PATTERNS = (
+    r"customer",
+    r"고객사",
+    r"regional customer",
+    r"지역별 고객",
+    r"고객 분포",
+    r"customer distribution",
+    r"market share",
+    r"시장 점유율",
+    r"competitor",
+    r"경쟁사",
+    r"strategic differences",
+    r"strategic positioning",
+    r"positioning",
+    r"service expansion",
+    r"서비스 확장",
+    r"recycling.*profit",
+    r"재활용.*수익성",
+    r"supply chain.*specific",
+    r"공급망.*구체",
+    r"quantitative",
+    r"정량",
+    r"financial",
+    r"재무",
+    r"profitability",
+    r"수익성",
+    r"execution challenges",
+    r"execution risk",
+    r"constraints",
+    r"limitations",
+    r"리스크",
+    r"제약",
+    r"한계",
+    r"battery chemistry",
+    r"화학물질별",
+    r"lineup",
+    r"라인업",
+    r"global production",
+    r"global manufacturing",
+    r"production site",
+    r"manufacturing site",
+    r"site-specific",
+    r"거점별",
+    r"생산 거점",
+    r"지역별 생산",
+    r"생산능력.*지역",
+    r"capacity.*region",
+    r"capacity.*site",
+    r"new business",
+    r"new business lines",
+    r"비ev",
+    r"new business areas",
+    r"concrete examples beyond general mentions",
+    r"구체적 사례",
+    r"service and solutions",
+    r"매출 기여도",
+    r"timeline",
+    r"timeline",
+    r"timelines",
+)
 
 
 def _has_minimum_company_analysis_signal(output: CompanyAnalysisOutput, references: list[str]) -> bool:
@@ -35,6 +99,7 @@ class CompanyCorePortfolioAgent(BaseAgent):
         config: AppConfig,
         llm_service: LLMService,
         rag_service: AgenticRAGService,
+        web_search_service: WebSearchService,
         vector_store_service: CompanyVectorStoreService,
         name: str,
         company: str,
@@ -45,6 +110,7 @@ class CompanyCorePortfolioAgent(BaseAgent):
         self._config = config
         self._llm_service = llm_service
         self._rag_service = rag_service
+        self._web_search_service = web_search_service
         self._vector_store_service = vector_store_service
         self.name = name
         self.company = company
@@ -75,21 +141,36 @@ class CompanyCorePortfolioAgent(BaseAgent):
 
         index_result = self._vector_store_service.ensure_index(self.company_id, pdf_path, index_dir)
         rag_result = self._rag_service.run(self.company, refined_query, index_result.index_dir, retrieval_state["top_k"])
+        trusted_web_results = self._collect_trusted_web_results(refined_query)
         chunk_preview = "\n\n".join(
             f"[{chunk['reference']}] {chunk['content'][:900]}" for chunk in rag_result.retrieved_chunks[:10]
         )
+        web_preview = "\n\n".join(
+            f"[{item.domain}] {item.title}\n{item.content}\nSource: {item.url}" for item in trusted_web_results
+        ) or "신뢰 기준을 통과한 외부 웹 근거 없음"
 
         system_prompt = (
             "You are a corporate strategy analyst focused on battery companies. "
-            "Use only the provided company-PDF evidence. Write all outputs in Korean. "
+            "Use the provided company-PDF evidence as the primary source, and use trusted web evidence only as a secondary external validation layer. "
+            "Write all outputs in Korean. "
             "Prefer non-overlapping points grounded in different sections or pages when the evidence allows it. "
             "Avoid repeating the same plant, customer, product line, or chemistry claim across multiple bullets unless the repetition adds a distinct strategic implication. "
             "Favor explicit facts with named technologies, applications, geographies, production footprints, customer programs, or portfolio moves over generic praise. "
-            "Separate what the company document states directly from what you cautiously infer. "
+            "Separate what the company document states directly from what you cautiously infer or externally validate. "
             "If a detail is not explicit in the company PDF, mark it as not clearly disclosed instead of treating it as a required blocker. "
             "Do not require competitor comparison, external market-share data, or financial metrics unless they are explicitly present in the supplied company PDF. "
             "Detailed customer names, service expansion, recycling strategy, or supply-chain specifics may be absent in a limited company PDF sample and should usually be treated as optional enrichment rather than hard blockers. "
+            "Each core competitiveness point should explain both the fact and why it matters strategically. "
+            "Each diversification point should specify the expansion direction, operating basis, and expected role in the portfolio. "
+            "Separate three things clearly when relevant: 1) current capability or disclosed fact, 2) management target or plan, 3) your strategic interpretation. "
+            "If a statement is a target, capacity plan, ambition, or announced direction rather than an already-secured outcome, describe it as a plan or target, not as an established fact. "
+            "Do not over-index on patent counts, headline capacity targets, or promotional technology language unless the evidence also explains commercialization, execution, or customer relevance. "
+            "Use trusted web evidence only when it comes from high-confidence domains such as official company sites, government or public institutions, or major global news organizations. "
+            "Do not rely on blogs, social posts, opinion summaries, or weak secondary commentary. "
+            "Do not default to optimistic company framing. For each major strength or diversification claim, actively consider execution risk, constraints, delays, dependence, or downside conditions when the evidence supports them. "
+            "If external trusted web evidence weakens or qualifies a company claim, reflect that tension rather than repeating the company-positive framing only. "
             "Fill missing_dimensions with any missing evidence buckets among technology/chemistry, manufacturing footprint, customer/product, ESS or non-EV expansion, and supply chain/recycling/service. "
+            "However, use missing_dimensions only for genuinely blocking evidence gaps. Do not mark optional detail, missing financial data, or lack of perfect quantification as blocking if a coherent best-effort company analysis is still possible. "
             "Use recommended_action=retry_retrieve when the evidence itself is too narrow, and recommended_action=retry_rewrite when the evidence exists but the synthesis is repetitive or weak. "
             "Set revision_needed=True only when recommended_action is not accept."
         )
@@ -101,8 +182,18 @@ class CompanyCorePortfolioAgent(BaseAgent):
             "다각화 전략은 EV 외 확장, chemistry diversification, ESS, 공급망/재활용/서비스 확장을 포함해.\n"
             "가능하면 서로 다른 페이지의 근거를 활용해 3개 이상의 핵심 경쟁력 포인트와 3개 이상의 다각화 포인트를 도출하되,\n"
             "같은 사실을 표현만 바꿔 반복하지 마.\n"
+            "핵심 기술력 각 항목은 '무엇을 보유/실행하는가 + 왜 전략적으로 중요한가'까지 포함해라.\n"
+            "다각화 전략 각 항목은 '어느 영역으로 확장하는가 + 그 확장의 기반이 무엇인가'까지 포함해라.\n"
+            "가능하면 각 회사에 대해 아래 질문에 답하는 재료가 되도록 써라: 이 회사의 moat는 무엇인가, 어디가 병목인가, 어떤 조건에서 우위가 약해지는가.\n"
+            "특허 수, 생산능력 목표, 시장 점유 목표 같은 항목은 그대로 칭찬 포인트로 쓰지 말고 실제 경쟁우위 연결고리가 있을 때만 의미를 부여해라.\n"
+            "이미 확보한 역량과 아직 계획/목표 단계인 항목을 혼동하지 마라.\n"
+            "회사 PDF에 없는 정보를 웹 근거로 보강할 수는 있지만, 웹 근거는 PDF 주장을 검증·보완하는 수준으로만 사용하고 과장하지 마.\n"
+            "핵심 경쟁력과 다각화 전략을 정리할 때, 가능하면 최소 1~2개의 제약 요인·실행 리스크·불확실성도 evidence에 포함해 일방적으로 긍정적인 서술을 피하라.\n"
+            "evidence는 보고서 본문에서 바로 근거로 쓸 수 있도록 구체 fact statement 5개 이상을 목표로 하라.\n"
+            "근거가 충분하지 않아도 가능한 범위 안에서 가장 타당한 best-effort 분석을 제공하라. 단, 불확실한 항목은 불확실하다고 명시하라.\n"
             "모든 결론은 보수적으로 정리하고, 확인된 사실과 해석을 섞지 마.\n\n"
-            f"회사 PDF 근거:\n{chunk_preview}"
+            f"회사 PDF 근거:\n{chunk_preview}\n\n"
+            f"신뢰도 필터를 통과한 외부 웹 근거:\n{web_preview}"
             f"{revision_guidance}"
         )
         output = self._llm_service.invoke_structured(system_prompt, user_prompt, CompanyAnalysisOutput)
@@ -116,59 +207,38 @@ class CompanyCorePortfolioAgent(BaseAgent):
             }
             for item in rag_result.retrieved_chunks
         ]
-        references = sanitize_references(rag_result.references)
-        rule_reflection = assess_company_output(output, references)
-        llm_failure_type = output.failure_type if output.failure_type != "none" else rag_result.reflection.failure_type
-        llm_missing_dimensions = filter_company_missing_dimensions(
+        references = sanitize_references(rag_result.references + [item.url for item in trusted_web_results])
+        agent_action = _pick_stricter_action(output.recommended_action, rag_result.reflection.recommended_action)
+        agent_failure_type = output.failure_type if output.failure_type != "none" else rag_result.reflection.failure_type
+        filtered_missing_points = _filter_non_blocking_company_points(
+            output.missing_points + rag_result.reflection.missing_points
+        )
+        filtered_missing_dimensions = filter_company_missing_dimensions(
             output.missing_dimensions + rag_result.reflection.missing_dimensions
         )
-        llm_missing_points = output.missing_points + rag_result.reflection.missing_points
-        llm_bias_checks = output.bias_checks + rag_result.reflection.bias_checks
-        llm_action = "accept"
-        if rule_reflection["recommended_action"] != "accept":
-            llm_action = (
-                rag_result.reflection.recommended_action
-                if rag_result.reflection.recommended_action != "accept"
-                else output.recommended_action
-            )
-        else:
-            llm_missing_points = []
-            llm_missing_dimensions = []
-        reflection = build_reflection(
-            focus="company core analysis with agentic RAG",
-            llm_missing_points=llm_missing_points,
-            llm_bias_checks=llm_bias_checks,
-            llm_missing_dimensions=llm_missing_dimensions,
-            llm_failure_type=llm_failure_type,
-            llm_action=llm_action,
-            rule_missing_points=rule_reflection["missing_points"],
-            rule_bias_checks=rule_reflection["bias_checks"],
-            rule_missing_dimensions=rule_reflection["missing_dimensions"],
-            rule_failure_type=rule_reflection["failure_type"],
-            rule_action=rule_reflection["recommended_action"],
-        )
         has_minimum_signal = _has_minimum_company_analysis_signal(output, references)
-        if has_minimum_signal and reflection["recommended_action"] == "accept":
-            verdict = "approved"
-        else:
-            verdict = reflection_action_to_verdict(reflection["recommended_action"])
-        reason = "; ".join(reflection["missing_points"]) if reflection["missing_points"] else "reflection approved"
-        search_evaluation = update_search_evaluation(
-            state[self.state_key]["search_evaluation"],
-            verdict=verdict,
-            last_reason=reason,
-        )
+        if has_minimum_signal and not filtered_missing_points:
+            agent_action = "accept"
+            agent_failure_type = "none"
+        agent_decision = {
+            "focus": "company core analysis with agentic RAG",
+            "missing_points": filtered_missing_points,
+            "bias_checks": _unique_strings(output.bias_checks + rag_result.reflection.bias_checks),
+            "missing_dimensions": filtered_missing_dimensions,
+            "failure_type": agent_failure_type,
+            "recommended_action": agent_action,
+            "revision_needed": (
+                (output.revision_needed or rag_result.reflection.revision_needed)
+                and agent_action != "accept"
+            ),
+        }
         logger.info(
-            "Completed %s cached=%s references=%s verdict=%s action=%s missing_dimensions=%s retry_count=%s revision_count=%s reason=%s",
+            "Completed %s cached=%s references=%s agent_action=%s missing_dimensions=%s",
             self.name,
             not index_result.needs_reindex,
             len(references),
-            search_evaluation["verdict"],
-            reflection["recommended_action"],
-            reflection["missing_dimensions"],
-            search_evaluation["retry_count"],
-            search_evaluation["revision_count"],
-            search_evaluation["last_reason"],
+            agent_decision["recommended_action"],
+            agent_decision["missing_dimensions"],
         )
         return {
             self.retrieval_state_key: {
@@ -191,11 +261,24 @@ class CompanyCorePortfolioAgent(BaseAgent):
                 "references": references,
                 "core_competitiveness": output.core_competitiveness,
                 "diversification_strategy": output.diversification_strategy,
-                "search_evaluation": search_evaluation,
-                "reflection": reflection,
+                "agent_decision": agent_decision,
+                "search_evaluation": state[self.state_key]["search_evaluation"],
+                "reflection": state[self.state_key]["reflection"],
                 "ready": True,
             }
         }
+
+    def _collect_trusted_web_results(self, refined_query: str):
+        queries = _build_company_web_queries(self.company, refined_query, self.state_key)
+        collected = []
+        seen_urls: set[str] = set()
+        for query in queries:
+            for item in self._web_search_service.search_trusted_company_results(self.company, query, max_results=8):
+                if item.url in seen_urls:
+                    continue
+                collected.append(item)
+                seen_urls.add(item.url)
+        return collected[:6]
 
 
 class LGESCorePortfolioAgent(CompanyCorePortfolioAgent):
@@ -204,12 +287,14 @@ class LGESCorePortfolioAgent(CompanyCorePortfolioAgent):
         config: AppConfig,
         llm_service: LLMService,
         rag_service: AgenticRAGService,
+        web_search_service: WebSearchService,
         vector_store_service: CompanyVectorStoreService,
     ) -> None:
         super().__init__(
             config=config,
             llm_service=llm_service,
             rag_service=rag_service,
+            web_search_service=web_search_service,
             vector_store_service=vector_store_service,
             name="lges_core_portfolio_agent",
             company="LG Energy Solution",
@@ -225,12 +310,14 @@ class CATLCorePortfolioAgent(CompanyCorePortfolioAgent):
         config: AppConfig,
         llm_service: LLMService,
         rag_service: AgenticRAGService,
+        web_search_service: WebSearchService,
         vector_store_service: CompanyVectorStoreService,
     ) -> None:
         super().__init__(
             config=config,
             llm_service=llm_service,
             rag_service=rag_service,
+            web_search_service=web_search_service,
             vector_store_service=vector_store_service,
             name="catl_core_portfolio_agent",
             company="CATL",
@@ -238,3 +325,49 @@ class CATLCorePortfolioAgent(CompanyCorePortfolioAgent):
             retrieval_state_key="catl_retrieval",
             company_id="catl",
         )
+
+
+def _build_company_web_queries(company: str, refined_query: str, state_key: str) -> list[str]:
+    company_focus = company
+    query_focus = refined_query.strip()
+    base_queries = [
+        f"{company_focus} battery technology roadmap Reuters official",
+        f"{company_focus} battery manufacturing capacity expansion Reuters official",
+        f"{company_focus} battery ESS diversification strategy Reuters official",
+        f"{company_focus} battery portfolio diversification official site Reuters",
+        f"{company_focus} battery risks headwinds delays Reuters official",
+        f"{company_focus} battery pricing pressure utilization challenge Reuters official",
+    ]
+    if "lges" in state_key:
+        base_queries.append(f"{company_focus} North America battery production official Reuters")
+    if "catl" in state_key:
+        base_queries.append(f"{company_focus} LFP battery strategy official Reuters")
+    if query_focus:
+        base_queries.append(f"{company_focus} {query_focus}")
+    return list(dict.fromkeys(base_queries))
+
+
+def _pick_stricter_action(left: str, right: str) -> str:
+    return left if _DECISION_ACTION_PRIORITY.get(left, 0) >= _DECISION_ACTION_PRIORITY.get(right, 0) else right
+
+
+def _unique_strings(values: list[str]) -> list[str]:
+    unique: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        stripped = value.strip()
+        if not stripped or stripped in seen:
+            continue
+        unique.append(stripped)
+        seen.add(stripped)
+    return unique
+
+
+def _filter_non_blocking_company_points(values: list[str]) -> list[str]:
+    filtered: list[str] = []
+    for value in _unique_strings(values):
+        normalized = value.lower()
+        if any(re.search(pattern, normalized) for pattern in _NON_BLOCKING_COMPANY_POINT_PATTERNS):
+            continue
+        filtered.append(value)
+    return filtered

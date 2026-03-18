@@ -18,7 +18,7 @@ from .orchestration import (
     SWOTParallelFanOut,
     SWOTParallelJoin,
 )
-from .services import AgenticRAGService, CompanyVectorStoreService, LLMService, ReportService, WebSearchService
+from .services import AgenticRAGService, CompanyVectorStoreService, LLMService, PremiumReportService, WebSearchService
 
 
 class GraphRegistry:
@@ -35,7 +35,7 @@ class GraphRegistry:
             self.web_search_service,
             self.config.max_rag_rounds,
         )
-        self.report_service = ReportService(self.config)
+        self.report_service = PremiumReportService(self.config)
 
         self.supervisor = SupervisorAgent()
         self.initial_parallel_fanout = InitialParallelFanOut()
@@ -44,12 +44,14 @@ class GraphRegistry:
             self.config,
             self.llm_service,
             self.rag_service,
+            self.web_search_service,
             self.vector_store_service,
         )
         self.catl_core = CATLCorePortfolioAgent(
             self.config,
             self.llm_service,
             self.rag_service,
+            self.web_search_service,
             self.vector_store_service,
         )
         self.initial_parallel_join = InitialParallelJoin()

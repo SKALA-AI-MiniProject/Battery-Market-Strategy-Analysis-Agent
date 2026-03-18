@@ -10,6 +10,7 @@ from .spec import (
     REPORT_MAX_REVISION,
 )
 from .state_models import (
+    AgentDecisionState,
     ControlState,
     CompanyCoreAnalysisState,
     ComparisonState,
@@ -25,6 +26,18 @@ from .state_models import (
 
 def make_reflection_state(focus: str) -> ReflectionState:
     return ReflectionState(
+        focus=focus,
+        missing_points=[],
+        bias_checks=[],
+        missing_dimensions=[],
+        failure_type="none",
+        recommended_action="accept",
+        revision_needed=False,
+    )
+
+
+def make_agent_decision_state(focus: str) -> AgentDecisionState:
+    return AgentDecisionState(
         focus=focus,
         missing_points=[],
         bias_checks=[],
@@ -70,6 +83,7 @@ def make_initial_state(raw_user_query: str, config: AppConfig) -> GraphState:
             market_view="",
             evidence=[],
             references=[],
+            agent_decision=make_agent_decision_state("market attractiveness and sector structure"),
             search_evaluation=make_search_evaluation_state(
                 max_retry=INITIAL_SEARCH_MAX_RETRY,
                 max_revision=INITIAL_SEARCH_MAX_REVISION,
@@ -98,6 +112,7 @@ def make_initial_state(raw_user_query: str, config: AppConfig) -> GraphState:
             references=[],
             core_competitiveness=[],
             diversification_strategy=[],
+            agent_decision=make_agent_decision_state("company core analysis with agentic RAG"),
             search_evaluation=make_search_evaluation_state(
                 max_retry=INITIAL_SEARCH_MAX_RETRY,
                 max_revision=INITIAL_SEARCH_MAX_REVISION,
@@ -112,6 +127,7 @@ def make_initial_state(raw_user_query: str, config: AppConfig) -> GraphState:
             references=[],
             core_competitiveness=[],
             diversification_strategy=[],
+            agent_decision=make_agent_decision_state("company core analysis with agentic RAG"),
             search_evaluation=make_search_evaluation_state(
                 max_retry=INITIAL_SEARCH_MAX_RETRY,
                 max_revision=INITIAL_SEARCH_MAX_REVISION,
@@ -147,6 +163,7 @@ def make_initial_state(raw_user_query: str, config: AppConfig) -> GraphState:
         report=ReportState(
             title="",
             summary="",
+            markdown_body="",
             markdown_path="",
             pdf_path="",
             references=[],
@@ -156,6 +173,7 @@ def make_initial_state(raw_user_query: str, config: AppConfig) -> GraphState:
                 "summary_is_consistent": False,
                 "references_are_relevant": False,
             },
+            agent_decision=make_agent_decision_state("report quality check before PDF generation"),
             search_evaluation=make_search_evaluation_state(
                 max_retry=REPORT_MAX_RETRY,
                 max_revision=REPORT_MAX_REVISION,
