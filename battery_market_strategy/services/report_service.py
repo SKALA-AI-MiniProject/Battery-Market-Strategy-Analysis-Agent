@@ -1091,8 +1091,9 @@ class DocumentHeaderFlowable(Flowable):
         canv.setFillColor(_PREM_WHITE)
         canv.setFont(self.font_name, 17)
         canv.drawString(pad, h - 10 * mm, self.title)
-        canv.setFont(self.font_name, 9)
-        canv.drawString(pad, h - 15 * mm, self.subtitle)
+        if self.subtitle.strip():
+            canv.setFont(self.font_name, 9)
+            canv.drawString(pad, h - 15 * mm, self.subtitle)
         badge_w = 22 * mm
         badge_x = w - pad - badge_w
         canv.setFillColor(colors.HexColor("#0F172A"))
@@ -1245,7 +1246,29 @@ class TwoColumnSWOTFlowable(Flowable):
 
     def wrap(self, avail_width: float, avail_height: float) -> tuple[float, float]:
         self._width = min(avail_width, self.avail_width)
-        self._height = 135 * mm
+        pad = 5 * mm
+        col_w = (self._width - pad * 3) / 2
+        font_name = self.font_name
+        font_size = 9
+        line_h_swot = 5.5 * mm
+        header_h = 7 * mm
+        section_bar_h = 5 * mm
+        section_gap = 1.5 * mm
+        section_bottom_gap = 3.5 * mm
+        top_gap = 4 * mm
+        bottom_pad = 5 * mm
+        text_w = col_w - 8 * mm
+
+        def column_height(contents: tuple[str, str, str, str]) -> float:
+            total = pad + header_h + top_gap
+            for content in contents:
+                lines = _wrap_text(content, font_name, font_size, text_w, max_lines=8)
+                line_count = max(1, len(lines))
+                total += section_bar_h + section_gap + (line_count * line_h_swot) + section_bottom_gap
+            total += bottom_pad
+            return total
+
+        self._height = max(column_height(self.lges), column_height(self.catl))
         return (self._width, self._height)
 
     def draw(self) -> None:
@@ -1278,11 +1301,12 @@ class TwoColumnSWOTFlowable(Flowable):
                 y -= bar_h_s + 1.5 * mm
                 canv.setFillColor(_PREM_SLATE)
                 canv.setFont(font_name, font_size)
-                line_h_swot = 6.5 * mm
-                for line in _wrap_text(content, font_name, font_size, text_w, max_lines=2)[:2]:
+                line_h_swot = 5.5 * mm
+                wrapped_lines = _wrap_text(content, font_name, font_size, text_w, max_lines=8)
+                for line in wrapped_lines:
                     canv.drawString(x0 + 4 * mm, y - 4, _truncate_line_to_width(line, font_name, font_size, text_w))
                     y -= line_h_swot
-                y -= 4 * mm
+                y -= 3.5 * mm
             canv.restoreState()
 
 
@@ -1355,20 +1379,24 @@ class PremiumReportService:
         Path("/Library/Fonts/Arial Unicode.ttf"),
         Path("/System/Library/Fonts/Supplemental/Arial Unicode.ttf"),
     ]
-    _SUBTITLE = "경쟁력 다각화 전략 분석 | 작성: 최수현 전무"
+    _SUBTITLE = ""
     _FOOTER_TEXT = "본 보고서는 AI Multi-Agent RAG 시스템으로 생성되었습니다."
 
     def __init__(self, config: AppConfig) -> None:
         self._config = config
         self._config.output_dir.mkdir(parents=True, exist_ok=True)
 
-    def save_report_premium(self, title: str, markdown_body: str) -> tuple[str, str]:
-        """프리미엄 PDF로 저장. 기존 MD는 덮어쓰지 않고, PDF만 저장."""
+    def save_report(self, title: str, markdown_body: str) -> tuple[str, str]:
         markdown_path = self._config.output_dir / "battery_strategy_report.md"
         pdf_path = self._config.output_dir / "battery_strategy_report.pdf"
-        logger.info("Saving premium report pdf=%s", pdf_path)
+        logger.info("Saving premium report markdown=%s pdf=%s", markdown_path, pdf_path)
+        markdown_path.write_text(f"# {title}\n\n{markdown_body}", encoding="utf-8")
         self._render_pdf(pdf_path, title, markdown_body)
         return str(markdown_path), str(pdf_path)
+
+    def save_report_premium(self, title: str, markdown_body: str) -> tuple[str, str]:
+        """프리미엄 테마로 마크다운과 PDF를 함께 저장."""
+        return self.save_report(title, markdown_body)
 
     @classmethod
     def _ensure_unicode_font(cls) -> str:
@@ -1429,8 +1457,8 @@ class PremiumReportService:
                 "TableCellPremium",
                 parent=sample["Normal"],
                 fontName=font_name,
-                fontSize=11,
-                leading=18,
+                fontSize=10,
+                leading=16,
                 textColor=_PREM_SLATE,
                 wordWrap="CJK",
                 leftIndent=0,
@@ -1576,8 +1604,8 @@ class PremiumReportService:
                         TableStyle(
                             [
                                 ("FONTNAME", (0, 0), (-1, -1), font_name),
-                                ("FONTSIZE", (0, 0), (-1, -1), 11),
-                                ("LEADING", (0, 0), (-1, -1), 18),
+                                ("FONTSIZE", (0, 0), (-1, -1), 10),
+                                ("LEADING", (0, 0), (-1, -1), 16),
                                 ("BACKGROUND", (0, 0), (-1, 0), _PREM_DARK_BLUE),
                                 ("TEXTCOLOR", (0, 0), (-1, 0), _PREM_WHITE),
                                 ("TEXTCOLOR", (0, 1), (-1, -1), _PREM_SLATE),
